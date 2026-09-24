@@ -9,7 +9,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from tfmplayground.configs import models as model_configs
 from tfmplayground.configs.models import NanoTabPFNClassifierConfig, NanoTabPFNRegressorConfig
 from tfmplayground.configs.training import ClassificationExperimentConfig
-from tfmplayground.evaluation.arena import CLASS_LIMIT_KEYS, make_experiments
+from tfmplayground.evaluation.arena import CLASS_LIMIT_KEYS, checkpoint_max_classes, make_experiments
 from tfmplayground.models.nanotabpfn import NanoTabPFNModel
 from tfmplayground.utils import Experiment
 
@@ -65,6 +65,16 @@ def make_task(tmp_path, classification: bool):
 def test_classifier_configs_expose_class_limit(config_class):
     """every classifier checkpoint tells how many classes it can predict"""
     assert any(key in asdict(config_class()) for key in CLASS_LIMIT_KEYS)
+
+
+@pytest.mark.parametrize(("max_classes", "out_dim", "expected"), [(10, 4, 4), (4, 10, 4), (10, 10, 10)])
+def test_class_limit_is_smallest_class_setting(tmp_path, max_classes, out_dim, expected):
+    """nanotabicl embeds max_classes but emits out_dim logits, so it predicts only the smaller of both"""
+    config = model_configs.NanoTabICLClassifierConfig(max_classes=max_classes, out_dim=out_dim)
+    checkpoint = {"problem": "classification", "config_class": type(config).__name__, "model_config": asdict(config)}
+    path = tmp_path / "nanotabicl.pth"
+    torch.save(checkpoint, path)
+    assert checkpoint_max_classes(path) == expected
 
 
 @pytest.mark.parametrize(("requested", "expected"), [(None, 3), (10, 3), (2, 2)])

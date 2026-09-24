@@ -18,8 +18,8 @@ from tfmplayground.interface import TabularClassifier, TabularRegressor
 from tfmplayground.utils import load_model
 
 ARENAS = ("tabarena", "beyondarena")
-# model configs name how many classes they predict differently
-CLASS_LIMIT_KEYS = ("max_classes", "num_outputs", "o")
+# model configs name how many classes they predict differently, some have more than one of these
+CLASS_LIMIT_KEYS = ("max_classes", "out_dim", "num_outputs", "o")
 
 
 class TFMPlaygroundModel(AbstractTorchModel):
@@ -137,14 +137,16 @@ def default_subset(arena: str, problem: str) -> list[str]:
 def checkpoint_max_classes(checkpoint_path: str | Path) -> int | None:
     """
     gives how many classes checkpoint can predict, None for regression
+
+    smallest of all class limits in config, e.g. nanotabicl embeds max_classes but emits out_dim logits
     """
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     if checkpoint["problem"] != "classification":
         return None
     model_config = checkpoint["model_config"]
-    for key in CLASS_LIMIT_KEYS:
-        if key in model_config:
-            return model_config[key]
+    limits = [model_config[key] for key in CLASS_LIMIT_KEYS if key in model_config]
+    if limits:
+        return min(limits)
     raise ValueError(f"{checkpoint['config_class']} has none of {CLASS_LIMIT_KEYS}, cannot tell its class limit")
 
 

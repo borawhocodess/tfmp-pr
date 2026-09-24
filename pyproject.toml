@@ -33,6 +33,13 @@ dependencies = [
     "interpret-core",  # ticl
     "mlflow",  # ticl
     "wandb>=0.20",  # ticl
+    "tabarena @ git+https://github.com/autogluon/tabarena.git@277a14a709e5284abba60d20e5b98e99644a1216#subdirectory=packages/tabarena",
+    "bencheval @ git+https://github.com/autogluon/tabarena.git@277a14a709e5284abba60d20e5b98e99644a1216#subdirectory=packages/bencheval",
+    # tabarena needs an autogluon nightly, exact pins let installers pick pre-releases without flags
+    "autogluon.tabular==1.6.4b20260922",
+    "autogluon.core==1.6.4b20260922",
+    "autogluon.features==1.6.4b20260922",
+    "autogluon.common==1.6.4b20260922",
 ]
 
 [project.optional-dependencies]

@@ -42,4 +42,22 @@ full examples in [examples/pretraining_classification.py](examples/pretraining_c
 
 ### eval stuff 
 
+periodic evaluation during pretraining uses [EvaluationConfig](tfmplayground/configs/evaluation.py) on openml tasks as a fast proxy.
+
+for the official score, pretrained checkpoints run through [TabArena](https://github.com/autogluon/tabarena)'s own evaluation: its tasks and splits, preprocessing, validation protocol (bagging), metrics and leaderboard, for both TabArena and BeyondArena. [adapter](tfmplayground/evaluation/arena.py)
+
+```python
+from tfmplayground.evaluation.arena import evaluate_arena
+
+leaderboard = evaluate_arena("path/to/ckpt-best.pth", arena="tabarena")  # or "beyondarena"
+```
+
+or from the command line
+
+```
+python -m tfmplayground.evaluation.arena path/to/ckpt-best.pth --arena tabarena --output_dir workdir/tabarena/eval
+```
+
+defaults are tabarena-lite (beyondarena core) tasks of checkpoint problem, `--outer` skips bagging for a faster unofficial run, and `--ray` runs jobs in parallel. full example in [examples/evaluate_tabarena.py](examples/evaluate_tabarena.py)
+
 ### train stuff 

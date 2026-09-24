@@ -18,6 +18,8 @@ from tfmplayground.interface import TabularClassifier, TabularRegressor
 from tfmplayground.utils import load_model
 
 ARENAS = ("tabarena", "beyondarena")
+# model configs name how many classes they predict differently
+CLASS_LIMIT_KEYS = ("max_classes", "num_outputs", "o")
 
 
 class TFMPlaygroundModel(AbstractTorchModel):
@@ -132,6 +134,20 @@ def default_subset(arena: str, problem: str) -> list[str]:
     return [splits, problem]
 
 
+def checkpoint_max_classes(checkpoint_path: str | Path) -> int | None:
+    """
+    gives how many classes checkpoint can predict, None for regression
+    """
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    if checkpoint["problem"] != "classification":
+        return None
+    model_config = checkpoint["model_config"]
+    for key in CLASS_LIMIT_KEYS:
+        if key in model_config:
+            return model_config[key]
+    raise ValueError(f"{checkpoint['config_class']} has none of {CLASS_LIMIT_KEYS}, cannot tell its class limit")
+
+
 def make_experiments(
     checkpoint_path: str | Path,
     *,
@@ -139,14 +155,15 @@ def make_experiments(
     outer: bool = False,
     max_n_features: int | None = 500,
     max_n_samples: int | None = 10_000,
-    max_n_classes: int | None = 10,
+    max_n_classes: int | None = None,
     time_limit: int | None = None,
     num_gpus: int | None = None,
 ) -> list:
     """
     gives arena experiments that run checkpoint under arena settings
 
-    tasks beyond what model supports are skipped, None means no limit
+    tasks beyond what model supports are skipped, None means no limit,
+    class limit is never above what checkpoint can predict
     """
     from tabarena.benchmark.experiment.model_constraints import ModelConstraints
     from tabarena.utils.config_utils import ConfigGenerator
@@ -156,6 +173,9 @@ def make_experiments(
         manual_configs=[{"checkpoint_path": str(Path(checkpoint_path).resolve())}],
         search_space={},
     )
+    checkpoint_classes = checkpoint_max_classes(checkpoint_path)
+    if checkpoint_classes is not None:
+        max_n_classes = checkpoint_classes if max_n_classes is None else min(max_n_classes, checkpoint_classes)
     constraints = ModelConstraints(
         max_n_features=max_n_features,
         max_n_samples_train_per_fold=max_n_samples,
@@ -179,7 +199,7 @@ def evaluate_arena(
     outer: bool = False,
     max_n_features: int | None = 500,
     max_n_samples: int | None = 10_000,
-    max_n_classes: int | None = 10,
+    max_n_classes: int | None = None,
     time_limit: int | None = None,
     num_gpus: int | None = None,
     results_dir: str | Path | None = None,
@@ -203,7 +223,8 @@ def evaluate_arena(
     outer : bool
         fits once on all training data instead of official bagging protocol, faster but unofficial
     max_n_features, max_n_samples, max_n_classes : int, optional
-        tasks beyond what model supports are skipped, None means no limit
+        tasks beyond what model supports are skipped, None means no limit,
+        class limit is never above what checkpoint can predict
     time_limit : int, optional
         fit time limit per task in seconds, defaults to arena default
     num_gpus : int, optional
@@ -257,7 +278,7 @@ def main() -> None:
     parser.add_argument("--outer", action="store_true", help="single fit on all training data, no bagging")
     parser.add_argument("--max_n_features", type=int, default=500)
     parser.add_argument("--max_n_samples", type=int, default=10_000)
-    parser.add_argument("--max_n_classes", type=int, default=10)
+    parser.add_argument("--max_n_classes", type=int, default=None, help="defaults to checkpoint class limit")
     parser.add_argument("--time_limit", type=int, default=None)
     parser.add_argument("--num_gpus", type=int, default=None)
     parser.add_argument("--results_dir", type=str, default=None)

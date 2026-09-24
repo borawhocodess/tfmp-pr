@@ -1,12 +1,15 @@
+from dataclasses import asdict
+
 import pandas as pd
 import pytest
 import torch
 from sklearn.datasets import make_classification, make_regression
 from sklearn.model_selection import StratifiedKFold, train_test_split
 
+from tfmplayground.configs import models as model_configs
 from tfmplayground.configs.models import NanoTabPFNClassifierConfig, NanoTabPFNRegressorConfig
 from tfmplayground.configs.training import ClassificationExperimentConfig
-from tfmplayground.evaluation.arena import make_experiments
+from tfmplayground.evaluation.arena import CLASS_LIMIT_KEYS, make_experiments
 from tfmplayground.models.nanotabpfn import NanoTabPFNModel
 from tfmplayground.utils import Experiment
 
@@ -53,6 +56,24 @@ def make_task(tmp_path, classification: bool):
     wrapper = task.create_task(dataset=dataset, target_feature="target", problem_type=problem, splits=splits)
     task.save_task(wrapper)
     return task, wrapper.metadata
+
+
+@pytest.mark.parametrize(
+    "config_class",
+    [getattr(model_configs, name) for name in dir(model_configs) if name.endswith("ClassifierConfig")],
+)
+def test_classifier_configs_expose_class_limit(config_class):
+    """every classifier checkpoint tells how many classes it can predict"""
+    assert any(key in asdict(config_class()) for key in CLASS_LIMIT_KEYS)
+
+
+@pytest.mark.parametrize(("requested", "expected"), [(None, 3), (10, 3), (2, 2)])
+def test_class_limit_follows_checkpoint(tmp_path, requested, expected):
+    """tasks with more classes than checkpoint predicts are never scheduled"""
+    model = NanoTabPFNModel(config=NanoTabPFNClassifierConfig(num_outputs=3, **SIZES))
+    checkpoint_path = save_checkpoint(tmp_path, model, "classification.pth")
+    experiments = make_experiments(checkpoint_path, max_n_classes=requested)
+    assert [experiment.model_constraints.max_n_classes for experiment in experiments] == [expected]
 
 
 @pytest.mark.parametrize("outer", [False, True])

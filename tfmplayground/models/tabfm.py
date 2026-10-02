@@ -3,7 +3,7 @@ from tabfm.src.pytorch.model import TabFM
 from torch import nn
 
 from tfmplayground.configs.models import TabFMClassifierConfig, TabFMRegressorConfig
-from tfmplayground.models.base import TabularFoundationModel
+from tfmplayground.models.base import TabularFoundationModel, standardize_features
 
 
 class TabFMModel(TabFM, TabularFoundationModel):
@@ -63,7 +63,7 @@ class TabFMModel(TabFM, TabularFoundationModel):
         """
         takes train rows as context and predicts test rows through tabfm forward
 
-        joins train and test rows, pads targets with zeros, and slices test outputs
+        standardizes features, joins train and test rows, pads targets with zeros, and slices test outputs
         """
         batch_size, _ = y_train.shape
         _, num_train_rows, _ = X_train.shape
@@ -71,6 +71,7 @@ class TabFMModel(TabFM, TabularFoundationModel):
         train_size = torch.full([batch_size], num_train_rows, device=X_train.device, dtype=torch.long)
         y_test_zeros = torch.zeros(batch_size, num_test_rows, device=y_train.device, dtype=y_train.dtype)
         x = torch.cat([X_train, X_test], dim=1)
+        x = standardize_features(x, num_train_rows)
         y = torch.cat([y_train, y_test_zeros], dim=1)
         output = super().forward(x, y, train_size)
         return output[:, num_train_rows:]

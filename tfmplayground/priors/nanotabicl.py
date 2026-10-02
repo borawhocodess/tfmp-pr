@@ -382,6 +382,8 @@ class NanoTabICLPrior(Prior):
         self.config = config
         self.problem = config.problem
         self.device = device if device is not None else get_default_device()
+        if self.problem not in ("classification", "regression"):
+            raise ValueError(f"{self.problem!r} problem is not in (classification, regression)")
         if not 0 < self.config.min_train_fraction <= self.config.max_train_fraction < 1:
             raise ValueError("train fractions must be 0 < min <= max < 1")
         if not 1 <= self.config.min_num_features <= self.config.max_num_features:

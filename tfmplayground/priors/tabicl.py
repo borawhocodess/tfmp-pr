@@ -92,12 +92,15 @@ class TabICLPrior(Prior):
         device: str | torch.device | None = None,
     ) -> None:
         """
-        keeps config, and checks datapoint limits
+        keeps config, and checks config limits
         """
         self.config = config
         self.device = device if device is not None else get_default_device()
-        if self.config.min_num_datapoints >= self.config.max_num_datapoints:
-            raise ValueError("datapoints minimum must be less than maximum")
+        if not 1 <= self.config.min_num_features <= self.config.max_num_features:
+            raise ValueError("feature counts must be 1 <= min <= max")
+        # tabicl samples its row count with np.random.randint, whose high is exclusive, so min stays below max
+        if not 1 < self.config.min_num_datapoints < self.config.max_num_datapoints:
+            raise ValueError("datapoint counts must be 1 < min < max")
         self.built_batch_size = None
 
     def build_sampler(self, batch_size: int) -> None:

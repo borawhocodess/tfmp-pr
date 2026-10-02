@@ -449,11 +449,12 @@ class NanoTabICLPrior(Prior):
             x, y = self.target(columns)
             if self.problem == "regression":
                 return x, y
-            for _ in range(self.max_row_permutations):
+            for check in range(1, self.max_row_permutations + 1):
                 if len(y.unique()) == len(y[: self.sep].unique()):
                     return x, y
-                perm = torch.randperm(y.shape[0])
-                x, y = x[perm], y[perm]
+                if check < self.max_row_permutations:
+                    perm = torch.randperm(y.shape[0])
+                    x, y = x[perm], y[perm]
 
     def batch(self, batch_size: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """

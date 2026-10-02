@@ -400,6 +400,8 @@ class NanoTabICLPrior(Prior):
         if self.problem == "classification":
             if self.config.max_num_classes < 2:
                 raise ValueError(f"classification needs at least 2 classes, not {self.config.max_num_classes}")
+            if not 0 <= self.config.binary_class_probability <= 1:
+                raise ValueError(f"binary class probability must be 0 to 1, not {self.config.binary_class_probability}")
             if self.config.max_row_permutations < 1:
                 raise ValueError(f"row permutations must be at least 1, not {self.config.max_row_permutations}")
             if min_num_train_rows < self.config.max_num_classes:

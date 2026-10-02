@@ -388,8 +388,8 @@ class NanoTabICLPrior(Prior):
             raise ValueError("feature counts must be 1 <= min <= max")
         if not 1 < self.config.min_num_datapoints <= self.config.max_num_datapoints:
             raise ValueError("datapoint counts must be 1 < min <= max")
-        min_num_train_rows = int(self.config.min_num_datapoints * self.config.min_train_fraction)
-        max_num_train_rows = int(self.config.min_num_datapoints * self.config.max_train_fraction)
+        min_num_train_rows = round(self.config.min_num_datapoints * self.config.min_train_fraction)
+        max_num_train_rows = round(self.config.min_num_datapoints * self.config.max_train_fraction)
         min_num_test_rows = self.config.min_num_datapoints - max_num_train_rows
         if min_num_train_rows < 2:
             raise ValueError(f"train part needs at least 2 rows, holds {min_num_train_rows} rows")
@@ -410,7 +410,7 @@ class NanoTabICLPrior(Prior):
         c = self.config
         self.num_features = int(np.random.randint(c.min_num_features, c.max_num_features + 1))
         self.num_datapoints = int(np.random.randint(c.min_num_datapoints, c.max_num_datapoints + 1))
-        self.sep = int(self.num_datapoints * np.random.uniform(c.min_train_fraction, c.max_train_fraction))
+        self.sep = round(self.num_datapoints * np.random.uniform(c.min_train_fraction, c.max_train_fraction))
 
     def dataset_hyperparameters(self) -> None:
         """

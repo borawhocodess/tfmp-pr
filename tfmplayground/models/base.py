@@ -10,7 +10,7 @@ def standardize_features(x: torch.Tensor, num_train_rows: int) -> torch.Tensor:
     """
     train_rows = x[:, :num_train_rows]
     mean = train_rows.mean(dim=1, keepdim=True)
-    std = train_rows.std(dim=1, keepdim=True) + 1e-8
+    std = train_rows.std(dim=1, correction=0, keepdim=True) + 1e-8
     return (x - mean) / std
 
 

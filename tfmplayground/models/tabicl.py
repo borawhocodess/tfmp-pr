@@ -3,7 +3,7 @@ from tabicl._model.inference_config import InferenceConfig
 from tabicl._model.tabicl import TabICL
 
 from tfmplayground.configs.models import TabICLClassifierConfig, TabICLRegressorConfig
-from tfmplayground.models.base import TabularFoundationModel
+from tfmplayground.models.base import TabularFoundationModel, standardize_features
 
 
 class TabICLModel(TabICL, TabularFoundationModel):
@@ -55,9 +55,10 @@ class TabICLModel(TabICL, TabularFoundationModel):
         """
         takes train rows as context and predicts test rows through tabicl forward
 
-        joins train and test rows and sets the model device for native inference
+        standardizes features, joins train and test rows, and sets the model device for native inference
         """
         X = torch.cat([X_train, X_test], dim=1)
+        X = standardize_features(X, X_train.shape[1])
         if self.training:
             return super().forward(X, y_train)
         config = InferenceConfig()

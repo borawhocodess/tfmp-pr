@@ -388,6 +388,8 @@ class NanoTabICLPrior(Prior):
             raise ValueError("feature counts must be 1 <= min <= max")
         if not 1 < self.config.min_num_datapoints <= self.config.max_num_datapoints:
             raise ValueError("datapoint counts must be 1 < min <= max")
+        if self.config.max_cat_size < 2:
+            raise ValueError(f"categorical sizes must be at least 2, not {self.config.max_cat_size}")
         min_num_train_rows = int(self.config.min_num_datapoints * self.config.min_train_fraction)
         max_num_train_rows = int(self.config.min_num_datapoints * self.config.max_train_fraction)
         min_num_test_rows = self.config.min_num_datapoints - max_num_train_rows
@@ -398,6 +400,8 @@ class NanoTabICLPrior(Prior):
         if self.problem == "classification":
             if self.config.max_num_classes < 2:
                 raise ValueError(f"classification needs at least 2 classes, not {self.config.max_num_classes}")
+            if not 0 <= self.config.binary_class_probability <= 1:
+                raise ValueError(f"binary class probability must be 0 to 1, not {self.config.binary_class_probability}")
             if self.config.max_row_permutations < 1:
                 raise ValueError(f"row permutations must be at least 1, not {self.config.max_row_permutations}")
             if min_num_train_rows < self.config.max_num_classes:

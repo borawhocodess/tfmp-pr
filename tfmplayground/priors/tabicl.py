@@ -96,7 +96,7 @@ class TabICLPrior(Prior):
         """
         self.config = config
         self.device = device if device is not None else get_default_device()
-        if self.config.num_datapoints_min >= self.config.num_datapoints_max:
+        if self.config.min_num_datapoints >= self.config.max_num_datapoints:
             raise ValueError("datapoints minimum must be less than maximum")
         self.built_batch_size = None
 
@@ -109,11 +109,11 @@ class TabICLPrior(Prior):
             regression=c.problem == "regression",
             batch_size=batch_size,
             batch_size_per_gp=batch_size,
-            min_features=c.num_features_min,
-            max_features=c.num_features_max,
+            min_features=c.min_num_features,
+            max_features=c.max_num_features,
             max_classes=c.max_num_classes,
-            min_seq_len=c.num_datapoints_min,
-            max_seq_len=c.num_datapoints_max,
+            min_seq_len=c.min_num_datapoints,
+            max_seq_len=c.max_num_datapoints,
             prior_type=c.prior_type,
             n_jobs=c.n_jobs,
             config=TabICLPriorDatasetConfig(

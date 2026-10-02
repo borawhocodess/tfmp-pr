@@ -388,6 +388,8 @@ class NanoTabICLPrior(Prior):
             raise ValueError("feature counts must be 1 <= min <= max")
         if not 1 < self.config.min_num_datapoints <= self.config.max_num_datapoints:
             raise ValueError("datapoint counts must be 1 < min <= max")
+        if self.config.max_cat_size < 2:
+            raise ValueError(f"categorical sizes must be at least 2, not {self.config.max_cat_size}")
         min_num_train_rows = int(self.config.min_num_datapoints * self.config.min_train_fraction)
         max_num_train_rows = int(self.config.min_num_datapoints * self.config.max_train_fraction)
         min_num_test_rows = self.config.min_num_datapoints - max_num_train_rows

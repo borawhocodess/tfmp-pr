@@ -11,8 +11,8 @@ class TrainingConfig(ABC):
     seed: int = 2402
     lr: float = 1e-4
     batch_size: int = 1
-    steps: int = 100
-    epochs: int = 10000
+    steps: int = 1_000_000
+    eval_every: int = 100
     grad_clip: float = 1.0
 
     @property

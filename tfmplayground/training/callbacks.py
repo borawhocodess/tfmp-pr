@@ -15,14 +15,14 @@ class Callback(ABC):
     """Abstract base class for callbacks."""
 
     @abstractmethod
-    def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
+    def on_eval(self, step: int, train_time: float, loss: float, model, **kwargs):
         """
-        Called at the end of each epoch.
+        Called every eval_every steps and after the last step.
 
         Args:
-            epoch (int): The current epoch number.
-            epoch_time (float): Time of the epoch in seconds.
-            loss (float): Mean loss for the epoch.
+            step (int): The number of optimizer steps so far.
+            train_time (float): Training time since the last eval in seconds.
+            loss (float): Mean loss since the last eval.
             model: The model being trained.
             **kwargs: Additional arguments.
         """
@@ -43,10 +43,10 @@ class BaseLoggerCallback(Callback):
 
 
 class ConsoleLoggerCallback(BaseLoggerCallback):
-    """Logger callback that prints epoch information to the console."""
+    """Logger callback that prints step information to the console."""
 
-    def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
-        print(f"Epoch {epoch:5d} | Time {epoch_time:5.2f}s | Mean Loss {loss:5.2f}", flush=True)
+    def on_eval(self, step: int, train_time: float, loss: float, model, **kwargs):
+        print(f"Step {step:7d} | Time {train_time:5.2f}s | Mean Loss {loss:5.2f}", flush=True)
 
     def close(self):
         """Nothing to clean up for print logger."""
@@ -54,23 +54,23 @@ class ConsoleLoggerCallback(BaseLoggerCallback):
 
 
 class TensorboardLoggerCallback(BaseLoggerCallback):
-    """Logger callback that logs epoch information to TensorBoard."""
+    """Logger callback that logs step information to TensorBoard."""
 
     def __init__(self, log_dir: str):
         from torch.utils.tensorboard import SummaryWriter
 
         self.writer = SummaryWriter(log_dir=log_dir)
 
-    def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
-        self.writer.add_scalar("Loss/train", loss, epoch)
-        self.writer.add_scalar("Time/epoch", epoch_time, epoch)
+    def on_eval(self, step: int, train_time: float, loss: float, model, **kwargs):
+        self.writer.add_scalar("Loss/train", loss, step)
+        self.writer.add_scalar("Time/train", train_time, step)
 
     def close(self):
         self.writer.close()
 
 
 class WandbLoggerCallback(BaseLoggerCallback):
-    """Logger callback that logs epoch information to Weights & Biases."""
+    """Logger callback that logs step information to Weights & Biases."""
 
     def __init__(self, project: str, name: str = None, config: dict = None, log_dir: str = None):
         """
@@ -90,8 +90,8 @@ class WandbLoggerCallback(BaseLoggerCallback):
         except ImportError as e:
             raise ImportError("wandb is not installed. Install it with: pip install wandb") from e
 
-    def on_epoch_end(self, epoch: int, epoch_time: float, loss: float, model, **kwargs):
-        log_dict = {"epoch": epoch, "loss": loss, "epoch_time": epoch_time}
+    def on_eval(self, step: int, train_time: float, loss: float, model, **kwargs):
+        log_dict = {"step": step, "loss": loss, "train_time": train_time}
         self.wandb.log(log_dict)
 
     def close(self):
@@ -110,18 +110,18 @@ class ExperimentCallback(BaseLoggerCallback):
         self.experiment = experiment
         self.experiment.log(f"experiment: {self.experiment.id}", console=True)
 
-    def on_epoch_end(
+    def on_eval(
         self,
-        epoch: int,
-        epoch_time: float,
+        step: int,
+        train_time: float,
         loss: float,
         model: TabularFoundationModel,
         **kwargs,
     ) -> None:
         """
-        records progress of one epoch
+        records progress since last eval
         """
-        self.experiment.log(f"epoch {epoch} | epoch time {epoch_time:.2f}s | mean loss {loss:.2f}")
+        self.experiment.log(f"step {step} | train time {train_time:.2f}s | mean loss {loss:.2f}")
 
     def close(self) -> None:
         """
@@ -166,16 +166,16 @@ class ExperimentEvaluationCallback(ExperimentCallback):
         """
         raise NotImplementedError
 
-    def on_epoch_end(
+    def on_eval(
         self,
-        epoch: int,
-        epoch_time: float,
+        step: int,
+        train_time: float,
         loss: float,
         model: TabularFoundationModel,
         **kwargs,
     ) -> None:
         """
-        scores model and records how good this epoch was
+        scores model and records how good it is at this step
         """
         scores = self.evaluate(model, **kwargs)
         if not scores:
@@ -183,8 +183,8 @@ class ExperimentEvaluationCallback(ExperimentCallback):
         mean = sum(scores) / len(scores)
         self.experiment.score = mean
         fields = [
-            f"epoch {epoch}",
-            f"epoch time {epoch_time:.2f}s",
+            f"step {step}",
+            f"train time {train_time:.2f}s",
             f"mean loss {loss:.2f}",
             f"{self.metric} {mean:.2f}",
             f"tasks {len(scores)}",

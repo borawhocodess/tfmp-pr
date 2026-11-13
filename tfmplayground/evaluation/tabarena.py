@@ -1,9 +1,12 @@
+from importlib.metadata import version
 from pathlib import Path
 
 import pandas as pd
+import torch
 from autogluon.tabular.models.abstract.abstract_torch_model import AbstractTorchModel
 from tabarena.benchmark.experiment import TabArenaV0pt1ExperimentBundle
 from tabarena.contexts import TabArenaContext
+from tabarena.contexts.tabarena.methods import tabarena_method_metadata_collection
 from tabarena.utils.config_utils import ConfigGenerator
 
 from tfmplayground.configs.evaluation import EvaluationConfig
@@ -19,7 +22,7 @@ class TFMPlaygroundModel(AbstractTorchModel):
     default_num_gpus = 1
 
     def _fit(self, X: pd.DataFrame, y: pd.Series, num_gpus: float = 0, **kwargs) -> None:
-        device = self._resolve_fit_device(num_gpus=num_gpus)
+        device = self._resolve_fit_device(num_gpus=num_gpus) if torch.cuda.is_available() else "cpu"
         model = load_model(self._get_model_params()["checkpoint"])
         interface = TabularRegressor if self.problem_type == "regression" else TabularClassifier
         self.model = interface(model, device=device).fit(self.preprocess(X), y.to_numpy())
@@ -39,6 +42,14 @@ class TFMPlaygroundModel(AbstractTorchModel):
     def _set_device(self, device: str) -> None:
         self.model.device = device
         self.model.model = self.model.model.to(device)
+
+
+def tabarena_version() -> str:
+    """
+    gives tabarena package version and date of its newest baseline, so results say which leaderboard they rank on
+    """
+    dates = [m.date for m in tabarena_method_metadata_collection.method_metadata_lst if m.date]
+    return f"{version('tabarena')} (baselines up to {max(dates)})"
 
 
 def evaluate_on_tabarena(checkpoint: str | Path, output_dir: str | Path, config: EvaluationConfig) -> pd.Series:

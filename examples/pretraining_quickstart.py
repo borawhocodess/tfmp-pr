@@ -19,7 +19,7 @@ model = pretrainTFM(
             max_num_classes=3,
         )
     ),
-    training=ClassificationTrainingConfig(batch_size=2, steps=100, epochs=10),
+    training=ClassificationTrainingConfig(batch_size=2, steps=1000, eval_every=100),
 )
 
 X, y = load_breast_cancer(return_X_y=True)

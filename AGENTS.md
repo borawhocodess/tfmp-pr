@@ -19,7 +19,7 @@ This file and the skills in `.claude/skills/` (currently only `add-model`) descr
 
 A single Python package, `tfmplayground`, plus examples and tests:
 
-- `tfmplayground/models/`: one adapter file per model (`nanotabpfn.py`, `moddednanotabpfn.py`, `nanotabicl.py`, `tabicl.py`, `tabfm.py`). `base.py` holds the `TabularFoundationModel` base class. nanotabpfn, moddednanotabpfn and nanotabicl are the only models where the full code was copied over into this repository, the other files only contain minimal code necessary in order to make the model code from the dependency compatible with our interface.
+- `tfmplayground/models/`: one adapter file per model (`nanotabpfn.py`, `moddednanotabpfn.py`, `nanotabicl.py`, `tabicl.py`, `tabfm.py`). `base.py` holds the `TabularFoundationModel` base class and `standardize_features`, which adapters call in `forward` when the upstream model does not scale its features itself, because the priors give raw features. nanotabpfn, moddednanotabpfn and nanotabicl are the only models where the full code was copied over into this repository, the other files only contain minimal code necessary in order to make the model code from the dependency compatible with our interface.
 - `tfmplayground/priors/`: one adapter file per prior. `base.py` holds the `Prior` base class and `PriorDataLoader`. `dump.py` reads and writes HDF5 prior dumps. `main.py` / `__main__.py` is the dump CLI (`python -m tfmplayground.priors`).
 - `tfmplayground/configs/`: dataclass configs, one file per area (`models.py`, `priors.py`, `training.py`, `evaluation.py`).
 - `tfmplayground/training/`: `pretrain.py` (`pretrainTFM`, the public entry point), `train.py` (the training loop), `callbacks.py` (logging and evaluation callbacks).

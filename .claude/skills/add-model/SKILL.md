@@ -66,6 +66,9 @@ From the clone and the paper, establish:
 - Differences between train and eval mode in `forward` (an inference config, a device argument, a KV cache, mixed
   precision casts). Our `TabularClassifier` / `TabularRegressor` call the model in eval mode under `torch.no_grad()`
   and expect float32 outputs.
+- Whether the upstream model scales its features inside `forward`. Our priors give raw features, and our evaluation
+  scales them, so an adapter whose upstream does not scale calls `standardize_features` from `models/base.py` on the
+  joined rows (see `models/tabfm.py`).
 - What `y_train` must look like. Our pipeline passes it as a float tensor of shape `(batch, rows)`: class indices
   `0..k-1` for classification, targets standardized per table for regression.
 - Parameters or buffers that only a pretrained checkpoint fills (TabFM's Fourier frequencies are the example). We train

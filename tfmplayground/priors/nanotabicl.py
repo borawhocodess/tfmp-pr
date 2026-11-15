@@ -382,14 +382,18 @@ class NanoTabICLPrior(Prior):
         self.config = config
         self.problem = config.problem
         self.device = device if device is not None else get_default_device()
+        if self.problem not in ("classification", "regression"):
+            raise ValueError(f"{self.problem!r} problem is not in (classification, regression)")
         if not 0 < self.config.min_train_fraction <= self.config.max_train_fraction < 1:
             raise ValueError("train fractions must be 0 < min <= max < 1")
         if not 1 <= self.config.min_num_features <= self.config.max_num_features:
             raise ValueError("feature counts must be 1 <= min <= max")
         if not 1 < self.config.min_num_datapoints <= self.config.max_num_datapoints:
             raise ValueError("datapoint counts must be 1 < min <= max")
-        min_num_train_rows = int(self.config.min_num_datapoints * self.config.min_train_fraction)
-        max_num_train_rows = int(self.config.min_num_datapoints * self.config.max_train_fraction)
+        if self.config.max_cat_size < 2:
+            raise ValueError(f"categorical sizes must be at least 2, not {self.config.max_cat_size}")
+        min_num_train_rows = round(self.config.min_num_datapoints * self.config.min_train_fraction)
+        max_num_train_rows = round(self.config.min_num_datapoints * self.config.max_train_fraction)
         min_num_test_rows = self.config.min_num_datapoints - max_num_train_rows
         if min_num_train_rows < 2:
             raise ValueError(f"train part needs at least 2 rows, holds {min_num_train_rows} rows")
@@ -398,6 +402,8 @@ class NanoTabICLPrior(Prior):
         if self.problem == "classification":
             if self.config.max_num_classes < 2:
                 raise ValueError(f"classification needs at least 2 classes, not {self.config.max_num_classes}")
+            if not 0 <= self.config.binary_class_probability <= 1:
+                raise ValueError(f"binary class probability must be 0 to 1, not {self.config.binary_class_probability}")
             if self.config.max_row_permutations < 1:
                 raise ValueError(f"row permutations must be at least 1, not {self.config.max_row_permutations}")
             if min_num_train_rows < self.config.max_num_classes:
@@ -410,7 +416,7 @@ class NanoTabICLPrior(Prior):
         c = self.config
         self.num_features = int(np.random.randint(c.min_num_features, c.max_num_features + 1))
         self.num_datapoints = int(np.random.randint(c.min_num_datapoints, c.max_num_datapoints + 1))
-        self.sep = int(self.num_datapoints * np.random.uniform(c.min_train_fraction, c.max_train_fraction))
+        self.sep = round(self.num_datapoints * np.random.uniform(c.min_train_fraction, c.max_train_fraction))
 
     def dataset_hyperparameters(self) -> None:
         """
@@ -449,11 +455,12 @@ class NanoTabICLPrior(Prior):
             x, y = self.target(columns)
             if self.problem == "regression":
                 return x, y
-            for _ in range(self.max_row_permutations):
+            for check in range(1, self.max_row_permutations + 1):
                 if len(y.unique()) == len(y[: self.sep].unique()):
                     return x, y
-                perm = torch.randperm(y.shape[0])
-                x, y = x[perm], y[perm]
+                if check < self.max_row_permutations:
+                    perm = torch.randperm(y.shape[0])
+                    x, y = x[perm], y[perm]
 
     def batch(self, batch_size: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """

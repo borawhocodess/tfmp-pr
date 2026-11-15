@@ -14,7 +14,7 @@ device = get_default_device()
 set_randomness_seed(11)  # important for making model weight initialization reproducible
 
 model_config = TabFMRegressorConfig()
-prior_config = TabICLRegressionPriorConfig(num_datapoints_min=10, num_datapoints_max=20, num_features_max=5)
+prior_config = TabICLRegressionPriorConfig(min_num_datapoints=10, max_num_datapoints=20, max_num_features=5)
 eval_config = EvaluationConfig(tasks="tabarena", max_n_samples=1200)
 train_config = RegressionTrainingConfig(seed=11, batch_size=2, epochs=3, steps=1)
 experiment_config = RegressionExperimentConfig(name="regression_example")

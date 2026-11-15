@@ -231,11 +231,11 @@ way, do not write a test for that property; mention it in the report.
    adapted from `examples/pretraining_quickstart.py`, and run it from the repo root so outputs land in `workdir/`:
    - classification: the new classifier config with a small network, `NanoTabICLPrior` with
      `NanoTabICLClassificationPriorConfig(min_num_datapoints=50, max_num_datapoints=50, max_num_features=3,
-     max_num_classes=3)`, `ClassificationTrainingConfig(batch_size=2, steps=100, epochs=10)`;
-   - regression: the same with `NanoTabICLRegressionPriorConfig` and `RegressionTrainingConfig(batch_size=2, steps=100,
-     epochs=10, bucket_borders_min_targets=10_000)` (the default of one million targets is slow for a smoke run).
-   - `pretrainTFM` always evaluates on the toy OpenML tasks after each epoch (the first run downloads them, later runs
-     use the OpenML cache), and prints one line per epoch: `epoch N | ... | mean loss X | <metric> Y | tasks Z`. Read
+     max_num_classes=3)`, `ClassificationTrainingConfig(batch_size=2, steps=1000, eval_every=100)`;
+   - regression: the same with `NanoTabICLRegressionPriorConfig` and `RegressionTrainingConfig(batch_size=2, steps=1000,
+     eval_every=100, bucket_borders_min_targets=10_000)` (the default of one million targets is slow for a smoke run).
+   - `pretrainTFM` always evaluates on the toy OpenML tasks every `eval_every` steps (the first run downloads them, later runs
+     use the OpenML cache), and prints one line per eval: `step N | ... | mean loss X | <metric> Y | tasks Z`. Read
      the loss and the metric from those lines. If the loss does not go down, look for a mistake in the forward mapping
      (wrong split index, labels fed as features, outputs taken from train rows) before touching hyperparameters.
 
@@ -246,7 +246,7 @@ Tell the user, in the chat:
 - the upstream class you wrapped and the dependency pin you added (or, if vendored, why wrapping was impossible)
 - the files created and edited
 - the supported problems and the default regression head, with the reason
-- the test results and the first and last epoch loss of each smoke run
+- the test results and the first and last eval loss of each smoke run
 - anything left open: config defaults that differ from the paper, a transductive forward pass, parameters you had to
   initialise because only a checkpoint fills them
 

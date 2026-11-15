@@ -17,7 +17,7 @@ set_randomness_seed(11)  # important for making model weight initialization repr
 model_config = ModdedNanoTabPFNClassifierConfig(l=10, o=10)
 prior_config = NanoTabICLClassificationPriorConfig()
 eval_config = EvaluationConfig(tasks="toy")
-train_config = ClassificationTrainingConfig(seed=11, batch_size=1, epochs=2, steps=1)
+train_config = ClassificationTrainingConfig(seed=11, batch_size=1, steps=2, eval_every=1)
 experiment_config = ClassificationExperimentConfig(name="classification_example")
 
 model = pretrainTFM(

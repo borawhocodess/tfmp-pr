@@ -164,6 +164,8 @@ def pretrainTFM(
 
     if training.steps < 1:
         raise ValueError("steps must be at least 1")
+    if training.eval_every < 1:
+        raise ValueError("eval_every must be at least 1")
     model.to(device)
     criterion = criterion.to(device)
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
@@ -172,13 +174,14 @@ def pretrainTFM(
     batches = iter(PriorDataLoader(prior, training.batch_size))
 
     try:
-        for epoch in range(1, training.epochs + 1):
-            epoch_start_time = time.time()
+        step = 0
+        while step < training.steps:
+            train_start_time = time.time()
             model.train()  # Turn on the train mode
             optimizer.train()
             total_loss = 0.0
             num_valid = 0
-            while num_valid < training.steps:
+            while num_valid < training.eval_every and step < training.steps:
                 x_train, y_train, x_test, y_test = next(batches)
                 x_train = x_train.to(device)
                 y_train = y_train.to(device)
@@ -217,13 +220,14 @@ def pretrainTFM(
                 optimizer.zero_grad()
                 total_loss += loss.cpu().detach().item()
                 num_valid += 1
+                step += 1
 
             end_time = time.time()
             mean_loss = total_loss / num_valid
             model.eval()
             optimizer.eval()
 
-            callback.on_epoch_end(epoch, end_time - epoch_start_time, mean_loss, model)
+            callback.on_eval(step, end_time - train_start_time, mean_loss, model)
             experiment.save_checkpoints(model)
     except KeyboardInterrupt:
         pass

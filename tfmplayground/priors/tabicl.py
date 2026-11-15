@@ -98,7 +98,6 @@ class TabICLPrior(Prior):
         self.device = device if device is not None else get_default_device()
         if not 1 <= self.config.min_num_features <= self.config.max_num_features:
             raise ValueError("feature counts must be 1 <= min <= max")
-        # tabicl samples its row count with np.random.randint, whose high is exclusive, so min stays below max
         if not 1 < self.config.min_num_datapoints < self.config.max_num_datapoints:
             raise ValueError("datapoint counts must be 1 < min < max")
         self.built_batch_size = None

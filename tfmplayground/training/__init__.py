@@ -6,7 +6,6 @@ from tfmplayground.training.callbacks import (
     RegressorExperimentEvaluationCallback,
 )
 from tfmplayground.training.pretrain import pretrainTFM
-from tfmplayground.training.train import train
 
 __all__ = [
     "Callback",
@@ -15,5 +14,4 @@ __all__ = [
     "ClassifierExperimentEvaluationCallback",
     "RegressorExperimentEvaluationCallback",
     "pretrainTFM",
-    "train",
 ]

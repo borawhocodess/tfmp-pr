@@ -259,6 +259,8 @@ def pretrainTFM(
         raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
     if not 0 <= training.warmup_proportion < 1:
         raise ValueError(f"warmup_proportion must be in [0, 1), not {training.warmup_proportion}")
+    if training.accumulation_steps < 1:
+        raise ValueError("accumulation_steps must be at least 1")
     model.to(device)
     optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
@@ -280,6 +282,7 @@ def pretrainTFM(
             optimizer.train()
             total_loss = 0.0
             num_valid = 0
+            num_accumulated = 0
             while num_valid < training.eval_every and step < training.steps:
                 x_train, y_train, x_test, y_test = next(batches)
                 x_train = x_train.to(device)
@@ -315,13 +318,17 @@ def pretrainTFM(
                     continue
 
                 loss = losses.mean()
-                loss.backward()
+                (loss / training.accumulation_steps).backward()
+                total_loss += loss.cpu().detach().item() / training.accumulation_steps
+                num_accumulated += 1
+                if num_accumulated < training.accumulation_steps:
+                    continue
+                num_accumulated = 0
                 torch.nn.utils.clip_grad_norm_(model.parameters(), training.grad_clip)
                 for group in optimizer.param_groups:
                     group["lr"] = learning_rate(training, step)
                 optimizer.step()
                 optimizer.zero_grad()
-                total_loss += loss.cpu().detach().item()
                 num_valid += 1
                 step += 1
 

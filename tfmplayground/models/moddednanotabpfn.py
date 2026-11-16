@@ -215,6 +215,7 @@ class ModdedNanoTabPFNModel(ModdedNanoTabPFN, TabularFoundationModel):
     """
 
     io_modules = ("feature_encoder", "target_encoder", "decoder")
+    block_modules = ("transformer_encoder.transformer_blocks",)
 
     def __init__(self, config: ModdedNanoTabPFNClassifierConfig | ModdedNanoTabPFNRegressorConfig) -> None:
         """

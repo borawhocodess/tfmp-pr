@@ -207,6 +207,7 @@ class NanoTabICLModel(NanoTabICLv2, TabularFoundationModel):
     """
 
     io_modules = ("x_embed", "y_embed_in", "y_embed_icl", "out_mlp")
+    block_modules = ("col_blocks", "row_blocks", "icl_blocks")
 
     def __init__(self, config: NanoTabICLClassifierConfig | NanoTabICLRegressorConfig) -> None:
         """

@@ -297,6 +297,7 @@ class NanoTabPFNModel(NanoTabPFN, TabularFoundationModel):
     """
 
     io_modules = ("feature_encoder", "target_encoder", "decoder")
+    block_modules = ("transformer_blocks",)
 
     def __init__(self, config: NanoTabPFNClassifierConfig | NanoTabPFNRegressorConfig) -> None:
         """

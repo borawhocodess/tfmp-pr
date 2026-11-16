@@ -17,6 +17,7 @@ class TabICLModel(TabICL, TabularFoundationModel):
         "icl_predictor.y_encoder",
         "icl_predictor.decoder",
     )
+    block_modules = ("col_embedder.tf_col.blocks", "row_interactor.tf_row.blocks", "icl_predictor.tf_icl.blocks")
 
     def __init__(self, config: TabICLClassifierConfig | TabICLRegressorConfig) -> None:
         """

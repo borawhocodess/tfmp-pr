@@ -262,6 +262,8 @@ def pretrainTFM(
     if training.accumulation_steps < 1:
         raise ValueError("accumulation_steps must be at least 1")
     model.to(device)
+    if training.gradient_checkpointing:
+        model.checkpoint_blocks()
     optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
     regression_task = not classification_task

@@ -170,6 +170,7 @@ def pretrainTFM(
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
     regression_task = not classification_task
+    device_type = torch.device(device).type
     batches = iter(PriorDataLoader(prior, training.batch_size))
     step = 0
     if experimentconfig.resume is not None:
@@ -204,7 +205,9 @@ def pretrainTFM(
                     if not torch.isfinite(y_train).all() or not torch.isfinite(y_test).all():
                         continue
 
-                output = model(x_train, y_train, x_test)
+                with torch.autocast(device_type, dtype=torch.bfloat16, enabled=training.mixed_precision):
+                    output = model(x_train, y_train, x_test)
+                output = output.float()  # loss is computed in full precision
                 if not torch.isfinite(output).all():
                     continue
                 if classification_task:

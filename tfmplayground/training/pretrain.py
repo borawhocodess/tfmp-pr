@@ -1,3 +1,4 @@
+import math
 import time
 
 import schedulefree
@@ -133,6 +134,13 @@ class MuonScheduleFree:
         self.muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
         self.adamw = schedulefree.AdamWScheduleFree(rest, lr=lr, weight_decay=weight_decay)
 
+    @property
+    def param_groups(self) -> list[dict]:
+        """
+        gives parameter groups of both optimizers, so a schedule can set their learning rate
+        """
+        return [*self.muon.param_groups, *self.adamw.param_groups]
+
     def step(self) -> None:
         """
         takes one step of both optimizers
@@ -184,6 +192,20 @@ def default_optimizer(
     return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
 
 
+def learning_rate(training: TrainingConfig, step: int) -> float:
+    """
+    gives learning rate for step: linear warmup over warmup_proportion of steps, then constant, or decaying to 0 on a
+    cosine over the remaining steps
+    """
+    warmup_steps = training.warmup_proportion * training.steps
+    if step < warmup_steps:
+        return training.lr * step / warmup_steps
+    if training.lr_schedule == "cosine":
+        progress = (step - warmup_steps) / (training.steps - warmup_steps)
+        return training.lr * 0.5 * (1 + math.cos(math.pi * progress))
+    return training.lr
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -233,6 +255,10 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
+    if training.lr_schedule not in ("constant", "cosine"):
+        raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
+    if not 0 <= training.warmup_proportion < 1:
+        raise ValueError(f"warmup_proportion must be in [0, 1), not {training.warmup_proportion}")
     model.to(device)
     optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
@@ -289,6 +315,8 @@ def pretrainTFM(
                 loss = losses.mean()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), training.grad_clip)
+                for group in optimizer.param_groups:
+                    group["lr"] = learning_rate(training, step)
                 optimizer.step()
                 optimizer.zero_grad()
                 total_loss += loss.cpu().detach().item()

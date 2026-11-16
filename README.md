@@ -68,6 +68,7 @@ Priors generate the synthetic tables for pretraining.
 Each batch is sampled when the training loop asks for it.
 
 - nanotabicl - [adapter](tfmplayground/priors/nanotabicl.py) · [config](tfmplayground/configs/priors.py) · [repo](https://github.com/soda-inria/nanotabicl)
+- scm - [adapter](tfmplayground/priors/scm.py) · [config](tfmplayground/configs/priors.py) · [paper](https://www.nature.com/articles/s41586-024-08328-6)
 - tabicl - [adapter](tfmplayground/priors/tabicl.py) · [config](tfmplayground/configs/priors.py) · [repo](https://github.com/soda-inria/tabicl) · [paper](https://arxiv.org/abs/2602.11139)
 
 #### Dumping

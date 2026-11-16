@@ -11,6 +11,13 @@ class TabICLModel(TabICL, TabularFoundationModel):
     adapts tabicl to tabularfoundationmodel interface
     """
 
+    io_modules = (
+        "col_embedder.in_linear",
+        "col_embedder.y_encoder",
+        "icl_predictor.y_encoder",
+        "icl_predictor.decoder",
+    )
+
     def __init__(self, config: TabICLClassifierConfig | TabICLRegressorConfig) -> None:
         """
         builds tabicl from config and reserves its borders

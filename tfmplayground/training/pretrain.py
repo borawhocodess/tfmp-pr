@@ -1,3 +1,4 @@
+import math
 import time
 
 import schedulefree
@@ -117,6 +118,94 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
+class MuonScheduleFree:
+    """
+    muon for hidden matrices and schedule-free adamw for every other parameter, with learning rate and weight decay
+    shared
+    """
+
+    def __init__(self, model: TabularFoundationModel, lr: float, weight_decay: float) -> None:
+        """
+        splits parameters of model between muon and schedule-free adamw
+        """
+        hidden = model.hidden_matrices()
+        hidden_ids = {id(parameter) for parameter in hidden}
+        rest = [parameter for parameter in model.parameters() if id(parameter) not in hidden_ids]
+        self.muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
+        self.adamw = schedulefree.AdamWScheduleFree(rest, lr=lr, weight_decay=weight_decay)
+
+    @property
+    def param_groups(self) -> list[dict]:
+        """
+        gives parameter groups of both optimizers, so a schedule can set their learning rate
+        """
+        return [*self.muon.param_groups, *self.adamw.param_groups]
+
+    def step(self) -> None:
+        """
+        takes one step of both optimizers
+        """
+        self.muon.step()
+        self.adamw.step()
+
+    def zero_grad(self) -> None:
+        """
+        clears gradients of both optimizers
+        """
+        self.muon.zero_grad()
+        self.adamw.zero_grad()
+
+    def train(self) -> None:
+        """
+        puts training weights into parameters of schedule-free adamw, muon has only one set
+        """
+        self.adamw.train()
+
+    def eval(self) -> None:
+        """
+        puts averaged weights into parameters of schedule-free adamw, muon has only one set
+        """
+        self.adamw.eval()
+
+    def state_dict(self) -> list[dict]:
+        """
+        gives states of both optimizers, so a run can resume
+        """
+        return [self.muon.state_dict(), self.adamw.state_dict()]
+
+    def load_state_dict(self, state: list[dict]) -> None:
+        """
+        puts back states of both optimizers
+        """
+        self.muon.load_state_dict(state[0])
+        self.adamw.load_state_dict(state[1])
+
+
+def default_optimizer(
+    model: TabularFoundationModel, training: TrainingConfig
+) -> schedulefree.AdamWScheduleFree | MuonScheduleFree:
+    """
+    gives schedule-free adamw, or muon for hidden matrices with schedule-free adamw for the rest
+    """
+    if training.muon:
+        return MuonScheduleFree(model, lr=training.lr, weight_decay=training.weight_decay)
+    return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
+
+
+def learning_rate(training: TrainingConfig, step: int) -> float:
+    """
+    gives learning rate for step: linear warmup over warmup_proportion of steps, then constant, or decaying to 0 on a
+    cosine over the remaining steps
+    """
+    warmup_steps = training.warmup_proportion * training.steps
+    if step < warmup_steps:
+        return training.lr * step / warmup_steps
+    if training.lr_schedule == "cosine":
+        progress = (step - warmup_steps) / (training.steps - warmup_steps)
+        return training.lr * 0.5 * (1 + math.cos(math.pi * progress))
+    return training.lr
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -166,8 +255,12 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
+    if training.lr_schedule not in ("constant", "cosine"):
+        raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
+    if not 0 <= training.warmup_proportion < 1:
+        raise ValueError(f"warmup_proportion must be in [0, 1), not {training.warmup_proportion}")
     model.to(device)
-    optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size, training.prior_workers))
@@ -224,6 +317,8 @@ def pretrainTFM(
                 loss = losses.mean()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), training.grad_clip)
+                for group in optimizer.param_groups:
+                    group["lr"] = learning_rate(training, step)
                 optimizer.step()
                 optimizer.zero_grad()
                 total_loss += loss.cpu().detach().item()

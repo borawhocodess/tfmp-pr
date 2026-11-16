@@ -158,6 +158,8 @@ class <Name>Model(<Upstream>, TabularFoundationModel):
     adapts <key> to tabularfoundationmodel interface
     """
 
+    io_modules = ("<input module>", ..., "<output module>")
+
     def __init__(self, config: <Name>ClassifierConfig | <Name>RegressorConfig) -> None:
         """
         builds <key> from config and reserves its borders
@@ -189,6 +191,9 @@ Rules:
 - Register `borders` with size `num_outputs + 1`, where `num_outputs` is the last dim of the output. The regression
   heads read the output count from it (`QuantileLoss(model.borders.numel() - 1)`) and `default_criterion` writes the
   fitted bucket borders into it.
+- Set the class attribute `io_modules` to the names of the input (embedding) modules and the output (decoder) module,
+  for example `io_modules = ("feature_encoder", "target_encoder", "decoder")`. Muon optimizes every other 2D weight
+  (`hidden_matrices()`) and leaves these to AdamW. Add the model to the parametrized test in `tests/test_muon.py`.
 - `forward` takes `X_train (batch, train_rows, features)`, `y_train (batch, train_rows)`, `X_test (batch, test_rows,
   features)` and returns `(batch, test_rows, num_outputs)` as float32. Slice off train rows if upstream returns all rows.
   Keep the signature exactly as in `TabularFoundationModel`.

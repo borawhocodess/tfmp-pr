@@ -16,6 +16,10 @@ class TrainingConfig(ABC):
     grad_clip: float = 1.0
     mixed_precision: bool = False
     prior_workers: int = 0
+    muon: bool = False
+    weight_decay: float = 0.0
+    lr_schedule: str = "constant"
+    warmup_proportion: float = 0.0
 
     @property
     @abstractmethod

@@ -161,7 +161,6 @@ def pretrainTFM(
     device = device if device is not None else get_default_device()
     eval = eval if eval is not None else EvaluationConfig()
     callback = default_callback(problem, experiment, eval, device)
-    experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
     if training.steps < 1:
         raise ValueError("steps must be at least 1")
@@ -179,6 +178,7 @@ def pretrainTFM(
     criterion = default_criterion(
         problem, model, prior, training, device, fit_borders=experimentconfig.resume is None
     ).to(device)
+    experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
     try:
         while step < training.steps:

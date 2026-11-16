@@ -166,6 +166,8 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
+    if training.grad_accumulation < 1:
+        raise ValueError("grad_accumulation must be at least 1")
     model.to(device)
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
@@ -180,6 +182,7 @@ def pretrainTFM(
     ).to(device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
+    accumulated = 0
     try:
         while step < training.steps:
             train_start_time = time.time()
@@ -219,12 +222,16 @@ def pretrainTFM(
                 if not torch.isfinite(losses).all():
                     continue
 
-                loss = losses.mean()
+                loss = losses.mean() / training.grad_accumulation
                 loss.backward()
+                total_loss += loss.cpu().detach().item()
+                accumulated += 1
+                if accumulated < training.grad_accumulation:
+                    continue
+                accumulated = 0
                 torch.nn.utils.clip_grad_norm_(model.parameters(), training.grad_clip)
                 optimizer.step()
                 optimizer.zero_grad()
-                total_loss += loss.cpu().detach().item()
                 num_valid += 1
                 step += 1
 

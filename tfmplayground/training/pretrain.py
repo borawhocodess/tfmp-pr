@@ -204,7 +204,9 @@ def pretrainTFM(
                     if not torch.isfinite(y_train).all() or not torch.isfinite(y_test).all():
                         continue
 
-                output = model(x_train, y_train, x_test)
+                with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=training.mixed_precision):
+                    output = model(x_train, y_train, x_test)
+                output = output.float()
                 if not torch.isfinite(output).all():
                     continue
                 if classification_task:

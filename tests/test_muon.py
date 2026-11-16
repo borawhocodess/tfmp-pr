@@ -22,10 +22,32 @@ class RandomPrior(Prior):
         return x[:, :20], y[:, :20], x[:, 20:], y[:, 20:]
 
 
-@pytest.mark.parametrize("name", ["NanoTabPFN", "ModdedNanoTabPFN", "NanoTabICL", "TabICL", "TabFM"])
+TINY_CONFIGS = {
+    "NanoTabPFN": dict(embedding_size=16, num_attention_heads=2, mlp_hidden_size=32, num_layers=2),
+    "ModdedNanoTabPFN": dict(l=2, a=2, e=16, h=32, thinking_rows=4),
+    "NanoTabICL": dict(
+        embed_dim=16, col_num_blocks=1, row_num_blocks=1, icl_num_blocks=1, col_nhead=2, row_nhead=2, icl_nhead=2
+    ),
+    "TabICL": dict(
+        embed_dim=16,
+        col_num_blocks=1,
+        col_nhead=2,
+        col_num_inds=4,
+        row_num_blocks=1,
+        row_nhead=2,
+        row_num_cls=2,
+        icl_num_blocks=1,
+        icl_nhead=2,
+    ),
+    "TabFM": dict(),
+}
+
+
+@pytest.mark.parametrize("name", TINY_CONFIGS)
 def test_io_modules_leave_hidden_matrices_to_muon(name):
     """Every input and output module should exist, and muon should get weight matrices only outside of them."""
-    model = getattr(models, f"{name}Model")(config=getattr(model_configs, f"{name}ClassifierConfig")())
+    config = getattr(model_configs, f"{name}ClassifierConfig")(**TINY_CONFIGS[name])
+    model = getattr(models, f"{name}Model")(config=config)
     names = {id(parameter): name for name, parameter in model.named_parameters()}
     hidden = {names[id(parameter)] for parameter in model.hidden_matrices()}
 

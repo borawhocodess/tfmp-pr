@@ -380,18 +380,25 @@ class Experiment:
 
     def __init__(self, config: ExperimentConfig) -> None:
         """
-        opens directory for this run
+        opens directory for this run, or directory of run that checkpoint in config.resume belongs to
         """
         self.started = datetime.now()
-        timestamp = self.started.strftime("%y%m%d-%H%M%S")
-        uid = uuid.uuid4().hex[:8]
-        name = config.name.strip()
-        self.id = f"{timestamp}-{uid}-{name}" if name else f"{timestamp}-{uid}"
-        self.dir = Path(config.experiments_dir) / config.problem / name / self.id
-        self.dir.mkdir(parents=True, exist_ok=True)
+        self.checkpoint = None
+        self.best_score = None
+        if config.resume is None:
+            timestamp = self.started.strftime("%y%m%d-%H%M%S")
+            uid = uuid.uuid4().hex[:8]
+            name = config.name.strip()
+            self.id = f"{timestamp}-{uid}-{name}" if name else f"{timestamp}-{uid}"
+            self.dir = Path(config.experiments_dir) / config.problem / name / self.id
+            self.dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.checkpoint = torch.load(config.resume, map_location="cpu")
+            self.id = self.checkpoint["experiment_id"]
+            self.dir = Path(config.resume).parent
+            self.best_score = self.checkpoint["best_score"]
         self.log_path = self.dir / f"{self.id}-log.txt"
         self.score = None
-        self.best_score = None
         self.best_checkpoint_path = self.dir / f"{self.id}-ckpt-best.pth"
         self.last_checkpoint_path = self.dir / f"{self.id}-ckpt-last.pth"
 
@@ -406,9 +413,17 @@ class Experiment:
             for name, value in asdict(config).items():
                 self.log(f"  {name}: {value}")
 
-    def save_checkpoint(self, path: Path, model: TabularFoundationModel) -> None:
+    def save_checkpoint(
+        self,
+        path: Path,
+        model: TabularFoundationModel,
+        optimizer: torch.optim.Optimizer | None = None,
+        step: int = 0,
+    ) -> None:
         """
         saves model so that interrupted write cannot lose earlier one
+
+        with optimizer and step, training can go on from this checkpoint
         """
         checkpoint = {
             "version": version("tfmplayground"),
@@ -418,20 +433,25 @@ class Experiment:
             "config_class": type(model.config).__name__,
             "model_config": asdict(model.config),
             "model_state": model.state_dict(),
+            "optimizer_state": None if optimizer is None else optimizer.state_dict(),
+            "step": step,
+            "best_score": self.best_score,
         }
         temporary_path = path.with_suffix(".tmp")
         torch.save(checkpoint, temporary_path)
         os.replace(temporary_path, path)
 
-    def save_checkpoints(self, model: TabularFoundationModel) -> None:
+    def save_checkpoints(self, model: TabularFoundationModel, optimizer: torch.optim.Optimizer, step: int) -> None:
         """
         keeps last model, and best one so far
         """
-        self.save_checkpoint(self.last_checkpoint_path, model)
-        if self.score is not None and math.isfinite(self.score):
-            if self.best_score is None or self.score > self.best_score:
-                self.best_score = self.score
-                self.save_checkpoint(self.best_checkpoint_path, model)
+        best = self.score is not None and math.isfinite(self.score)
+        best = best and (self.best_score is None or self.score > self.best_score)
+        if best:
+            self.best_score = self.score
+        self.save_checkpoint(self.last_checkpoint_path, model, optimizer, step)
+        if best:
+            self.save_checkpoint(self.best_checkpoint_path, model, optimizer, step)
 
     def log(self, s: str, console: bool = False) -> None:
         """

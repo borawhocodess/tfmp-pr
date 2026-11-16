@@ -89,11 +89,12 @@ def default_criterion(
     prior: Prior,
     training: TrainingConfig,
     device: str | torch.device,
+    fit_borders: bool = True,
 ) -> nn.Module:
     """
     gives loss that matches problem
 
-    fits bucket borders from prior when regression head needs them
+    fits bucket borders from prior when regression head needs them, unless model already has borders of resumed run
     """
     if problem == "classification":
         return nn.CrossEntropyLoss()
@@ -105,12 +106,13 @@ def default_criterion(
         if head == "buckets":
             if num_outputs < 2:
                 raise ValueError(f"{head!r} head needs more than 1 output, not {num_outputs}")
-            model.borders = make_bucket_borders(
-                prior=prior,
-                num_buckets=num_outputs,
-                batch_size=training.batch_size,
-                min_targets=training.bucket_borders_min_targets,
-            ).to(device)
+            if fit_borders:
+                model.borders = make_bucket_borders(
+                    prior=prior,
+                    num_buckets=num_outputs,
+                    batch_size=training.batch_size,
+                    min_targets=training.bucket_borders_min_targets,
+                ).to(device)
         model.config.head = head
         return make_regression_decoder(model).to(device)
 
@@ -142,7 +144,7 @@ def pretrainTFM(
     training : TrainingConfig, optional
         seed, sizes and limits for training loop
     experiment : ExperimentConfig, optional
-        name and directory for experiment artifact tracking
+        name and directory for experiment artifact tracking, or checkpoint of run to resume
     device : torch.device, optional
         device that holds model and training batches
 
@@ -155,10 +157,15 @@ def pretrainTFM(
     experimentconfig = experiment if experiment is not None else default_experiment(problem)
     experiment = Experiment(config=experimentconfig)
     training = training if training is not None else default_training(problem)
-    set_randomness_seed(training.seed)
+    checkpoint = experiment.checkpoint
+    step = 0
+    if checkpoint is not None:
+        step = checkpoint["step"]
+        model.load_state_dict(checkpoint["model_state"])
+    set_randomness_seed(training.seed + step)  # resumed run must not sample tables of first steps again
     device = device if device is not None else get_default_device()
     eval = eval if eval is not None else EvaluationConfig()
-    criterion = default_criterion(problem, model, prior, training, device)
+    criterion = default_criterion(problem, model, prior, training, device, fit_borders=checkpoint is None)
     callback = default_callback(problem, experiment, eval, device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
@@ -169,12 +176,15 @@ def pretrainTFM(
     model.to(device)
     criterion = criterion.to(device)
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    if checkpoint is not None:
+        optimizer.load_state_dict(checkpoint["optimizer_state"])
+        experiment.log(f"resumed: step {step}", console=True)
+        experiment.checkpoint = checkpoint = None  # weights are in model and optimizer now
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size))
 
     try:
-        step = 0
         while step < training.steps:
             train_start_time = time.time()
             model.train()  # Turn on the train mode
@@ -228,7 +238,7 @@ def pretrainTFM(
             optimizer.eval()
 
             callback.on_eval(step, end_time - train_start_time, mean_loss, model)
-            experiment.save_checkpoints(model)
+            experiment.save_checkpoints(model, optimizer, step)
     except KeyboardInterrupt:
         pass
     finally:

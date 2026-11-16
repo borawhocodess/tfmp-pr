@@ -296,6 +296,8 @@ class NanoTabPFNModel(NanoTabPFN, TabularFoundationModel):
     adapts nanotabpfn to tabularfoundationmodel interface
     """
 
+    io_modules = ("feature_encoder", "target_encoder", "decoder")
+
     def __init__(self, config: NanoTabPFNClassifierConfig | NanoTabPFNRegressorConfig) -> None:
         """
         builds nanotabpfn from config and reserves its borders

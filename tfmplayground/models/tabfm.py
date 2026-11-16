@@ -11,6 +11,8 @@ class TabFMModel(TabFM, TabularFoundationModel):
     adapts tabfm to tabularfoundationmodel interface
     """
 
+    io_modules = ("cell_embedder", "icl_predictor.y_encoder", "icl_predictor.decoder")
+
     def __init__(self, config: TabFMClassifierConfig | TabFMRegressorConfig) -> None:
         """
         builds tabfm from config and makes its fourier frequencies random

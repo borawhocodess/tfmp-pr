@@ -14,6 +14,8 @@ class TrainingConfig(ABC):
     steps: int = 1_000_000
     eval_every: int = 100
     grad_clip: float = 1.0
+    optimizer: str = "schedulefree_adamw"
+    weight_decay: float = 0.0
 
     @property
     @abstractmethod

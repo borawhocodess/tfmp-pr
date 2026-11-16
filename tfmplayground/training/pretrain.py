@@ -117,6 +117,76 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
+class MuonAdamW:
+    """
+    muon for hidden matrices and adamw for every other parameter, with learning rate and weight decay shared
+    """
+
+    def __init__(self, model: TabularFoundationModel, lr: float, weight_decay: float) -> None:
+        """
+        splits parameters of model between muon and adamw
+        """
+        hidden = model.hidden_matrices()
+        hidden_ids = {id(parameter) for parameter in hidden}
+        rest = [parameter for parameter in model.parameters() if id(parameter) not in hidden_ids]
+        self.optimizers = []
+        if hidden:
+            muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
+            self.optimizers.append(muon)
+        if rest:
+            self.optimizers.append(torch.optim.AdamW(rest, lr=lr, weight_decay=weight_decay))
+
+    def step(self) -> None:
+        """
+        takes one step of both optimizers
+        """
+        for optimizer in self.optimizers:
+            optimizer.step()
+
+    def zero_grad(self) -> None:
+        """
+        clears gradients of both optimizers
+        """
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
+
+    def train(self) -> None:
+        """
+        does nothing, since only schedule-free optimizers keep separate weights for training
+        """
+
+    def eval(self) -> None:
+        """
+        does nothing, since only schedule-free optimizers keep separate weights for evaluation
+        """
+
+    def state_dict(self) -> list[dict]:
+        """
+        gives states of both optimizers, so a run can resume
+        """
+        return [optimizer.state_dict() for optimizer in self.optimizers]
+
+    def load_state_dict(self, state: list[dict]) -> None:
+        """
+        puts back states of both optimizers
+        """
+        for optimizer, optimizer_state in zip(self.optimizers, state, strict=True):
+            optimizer.load_state_dict(optimizer_state)
+
+
+def default_optimizer(
+    model: TabularFoundationModel, training: TrainingConfig
+) -> schedulefree.AdamWScheduleFree | MuonAdamW:
+    """
+    gives optimizer that training config names
+    """
+    if training.optimizer == "schedulefree_adamw":
+        return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
+    if training.optimizer == "muon":
+        return MuonAdamW(model, lr=training.lr, weight_decay=training.weight_decay)
+    raise ValueError(f"{training.optimizer!r} optimizer is not in (schedulefree_adamw, muon)")
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -167,7 +237,7 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
-    optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size))

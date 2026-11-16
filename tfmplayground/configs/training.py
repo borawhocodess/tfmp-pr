@@ -16,6 +16,7 @@ class TrainingConfig(ABC):
     grad_clip: float = 1.0
     optimizer: str = "schedulefree_adamw"
     weight_decay: float = 0.0
+    lr_schedule: str = "constant"
 
     @property
     @abstractmethod

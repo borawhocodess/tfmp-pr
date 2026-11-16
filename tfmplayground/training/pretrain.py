@@ -1,3 +1,4 @@
+import math
 import time
 
 import schedulefree
@@ -136,6 +137,13 @@ class MuonAdamW:
         if rest:
             self.optimizers.append(torch.optim.AdamW(rest, lr=lr, weight_decay=weight_decay))
 
+    @property
+    def param_groups(self) -> list[dict]:
+        """
+        gives parameter groups of both optimizers, so a schedule can set their learning rate
+        """
+        return [group for optimizer in self.optimizers for group in optimizer.param_groups]
+
     def step(self) -> None:
         """
         takes one step of both optimizers
@@ -187,6 +195,15 @@ def default_optimizer(
     raise ValueError(f"{training.optimizer!r} optimizer is not in (schedulefree_adamw, muon)")
 
 
+def learning_rate(training: TrainingConfig, step: int) -> float:
+    """
+    gives learning rate for step, constant or decaying from lr to 0 over all steps on a cosine
+    """
+    if training.lr_schedule == "cosine":
+        return training.lr * 0.5 * (1 + math.cos(math.pi * step / training.steps))
+    return training.lr
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -236,6 +253,8 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
+    if training.lr_schedule not in ("constant", "cosine"):
+        raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
     model.to(device)
     optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
@@ -292,6 +311,8 @@ def pretrainTFM(
                 loss = losses.mean()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), training.grad_clip)
+                for group in optimizer.param_groups:
+                    group["lr"] = learning_rate(training, step)
                 optimizer.step()
                 optimizer.zero_grad()
                 total_loss += loss.cpu().detach().item()

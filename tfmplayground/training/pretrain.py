@@ -1,8 +1,10 @@
 import time
+from functools import partial
 
 import schedulefree
 import torch
 from torch import nn
+from torch.utils.checkpoint import checkpoint
 
 from tfmplayground.configs.evaluation import EvaluationConfig
 from tfmplayground.configs.training import (
@@ -117,6 +119,18 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
+def checkpoint_blocks(model: TabularFoundationModel) -> list[nn.Module]:
+    """
+    makes every block of a module list compute its activations again in backward pass, instead of keeping them
+
+    gives blocks back, deleting their forward attribute undoes it
+    """
+    blocks = [block for module in model.modules() if isinstance(module, nn.ModuleList) for block in module]
+    for block in blocks:
+        block.forward = partial(checkpoint, block.forward, use_reentrant=False)
+    return blocks
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -180,6 +194,7 @@ def pretrainTFM(
     ).to(device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
+    blocks = checkpoint_blocks(model) if training.grad_checkpointing else []
     try:
         while step < training.steps:
             train_start_time = time.time()
@@ -239,6 +254,8 @@ def pretrainTFM(
     except KeyboardInterrupt:
         pass
     finally:
+        for block in blocks:
+            del block.forward
         callback.close()
 
     return model

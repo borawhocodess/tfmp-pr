@@ -4,6 +4,7 @@ from tfmplayground.configs.models import NanoTabPFNClassifierConfig
 from tfmplayground.configs.training import ClassificationExperimentConfig, ClassificationTrainingConfig
 from tfmplayground.models.nanotabpfn import NanoTabPFNModel
 from tfmplayground.priors.base import Prior
+from tfmplayground.training.callbacks import ClassifierExperimentEvaluationCallback
 from tfmplayground.training.pretrain import pretrainTFM
 
 
@@ -42,8 +43,9 @@ def train(steps: int, experiments_dir, resume: str | None = None) -> NanoTabPFNM
     )
 
 
-def test_resumed_training_matches_uninterrupted_training(tmp_path):
+def test_resumed_training_matches_uninterrupted_training(tmp_path, monkeypatch):
     """Training 2 steps and resuming for 2 more should give the same model as training 4 steps at once."""
+    monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", lambda self, model, **kwargs: [0.5])
     uninterrupted = train(4, tmp_path / "uninterrupted")
     train(2, tmp_path / "interrupted")
     (run_dir,) = (tmp_path / "interrupted" / "classification" / "resume").iterdir()

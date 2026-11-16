@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 import torch
 from torch.utils.checkpoint import checkpoint
@@ -96,17 +98,27 @@ class RandomPrior(Prior):
         return x[:, :20], y[:, :20], x[:, 20:], y[:, 20:]
 
 
-def test_training_config_turns_on_checkpointing(tmp_path, monkeypatch):
-    """Training with gradient_checkpointing should train a model whose blocks are checkpointed."""
-    monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", lambda self, model, **kwargs: [0.5])
-    config = model_configs.NanoTabPFNClassifierConfig(**TINY_CONFIGS["NanoTabPFN"], num_outputs=3)
-    model = pretrainTFM(
-        "classification",
-        models.NanoTabPFNModel(config=config),
-        RandomPrior(),
-        training=ClassificationTrainingConfig(steps=2, eval_every=2, gradient_checkpointing=True),
-        experiment=ClassificationExperimentConfig(experiments_dir=str(tmp_path)),
-        device="cpu",
-    )
+def test_training_checkpoints_blocks_once_and_gives_them_back(tmp_path, monkeypatch):
+    """Training with gradient_checkpointing should wrap blocks once per run and unwrap them after."""
+    forwards = []
 
-    assert all(block.forward.func is checkpoint for block in model.transformer_blocks)
+    def evaluate(self, model, **kwargs):
+        forwards.extend(block.forward for block in model.transformer_blocks)
+        return [0.5]
+
+    monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", evaluate)
+    config = model_configs.NanoTabPFNClassifierConfig(**TINY_CONFIGS["NanoTabPFN"], num_outputs=3)
+    model = models.NanoTabPFNModel(config=config)
+    for _ in range(2):
+        model = pretrainTFM(
+            "classification",
+            model,
+            RandomPrior(),
+            training=ClassificationTrainingConfig(steps=2, eval_every=2, gradient_checkpointing=True),
+            experiment=ClassificationExperimentConfig(experiments_dir=str(tmp_path)),
+            device="cpu",
+        )
+        assert not any("forward" in vars(block) for block in model.transformer_blocks)
+
+    assert len(forwards) == 2 * len(model.transformer_blocks)
+    assert all(forward.func is checkpoint and not isinstance(forward.args[0], partial) for forward in forwards)

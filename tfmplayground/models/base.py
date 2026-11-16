@@ -24,6 +24,14 @@ class TabularFoundationModel(nn.Module, ABC):
             for block in self.get_submodule(name):
                 block.forward = partial(checkpoint, block.forward, use_reentrant=False)
 
+    def uncheckpoint_blocks(self) -> None:
+        """
+        gives every block its own forward back, which undoes checkpoint_blocks
+        """
+        for name in self.block_modules:
+            for block in self.get_submodule(name):
+                vars(block).pop("forward", None)
+
     @abstractmethod
     def forward(
         self,

@@ -167,8 +167,6 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
-    if training.gradient_checkpointing:
-        model.checkpoint_blocks()
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
     regression_task = not classification_task
@@ -182,6 +180,8 @@ def pretrainTFM(
     ).to(device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
+    if training.gradient_checkpointing:
+        model.checkpoint_blocks()
     try:
         while step < training.steps:
             train_start_time = time.time()
@@ -241,6 +241,8 @@ def pretrainTFM(
     except KeyboardInterrupt:
         pass
     finally:
+        if training.gradient_checkpointing:
+            model.uncheckpoint_blocks()
         callback.close()
 
     return model

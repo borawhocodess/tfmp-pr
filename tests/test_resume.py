@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from tfmplayground.configs.models import NanoTabPFNClassifierConfig
@@ -19,7 +20,7 @@ class RandomPrior(Prior):
         return x[:, :20], y[:, :20], x[:, 20:], y[:, 20:]
 
 
-def train(steps: int, experiments_dir, resume: str | None = None) -> NanoTabPFNModel:
+def train(steps: int, experiments_dir, resume: str | None = None, muon: bool = False) -> NanoTabPFNModel:
     """
     trains small classifier for steps, from scratch or from resumed run
     """
@@ -37,19 +38,20 @@ def train(steps: int, experiments_dir, resume: str | None = None) -> NanoTabPFNM
         "classification",
         model,
         RandomPrior(),
-        training=ClassificationTrainingConfig(steps=steps, eval_every=2),
+        training=ClassificationTrainingConfig(steps=steps, eval_every=2, muon=muon),
         experiment=ClassificationExperimentConfig(name="resume", experiments_dir=str(experiments_dir), resume=resume),
         device="cpu",
     )
 
 
-def test_resumed_training_matches_uninterrupted_training(tmp_path, monkeypatch):
+@pytest.mark.parametrize("muon", [False, True])
+def test_resumed_training_matches_uninterrupted_training(tmp_path, monkeypatch, muon):
     """Training 2 steps and resuming for 2 more should give the same model as training 4 steps at once."""
     monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", lambda self, model, **kwargs: [0.5])
-    uninterrupted = train(4, tmp_path / "uninterrupted")
-    train(2, tmp_path / "interrupted")
+    uninterrupted = train(4, tmp_path / "uninterrupted", muon=muon)
+    train(2, tmp_path / "interrupted", muon=muon)
     (run_dir,) = (tmp_path / "interrupted" / "classification" / "resume").iterdir()
-    resumed = train(4, tmp_path / "interrupted", resume=str(run_dir))
+    resumed = train(4, tmp_path / "interrupted", resume=str(run_dir), muon=muon)
 
     for name, value in uninterrupted.state_dict().items():
         torch.testing.assert_close(resumed.state_dict()[name], value, rtol=0, atol=0)

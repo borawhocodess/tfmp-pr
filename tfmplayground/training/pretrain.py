@@ -117,6 +117,73 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
+class MuonScheduleFree:
+    """
+    muon for hidden matrices and schedule-free adamw for every other parameter, with learning rate and weight decay
+    shared
+    """
+
+    def __init__(self, model: TabularFoundationModel, lr: float, weight_decay: float) -> None:
+        """
+        splits parameters of model between muon and schedule-free adamw
+        """
+        hidden = model.hidden_matrices()
+        hidden_ids = {id(parameter) for parameter in hidden}
+        rest = [parameter for parameter in model.parameters() if id(parameter) not in hidden_ids]
+        self.muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
+        self.adamw = schedulefree.AdamWScheduleFree(rest, lr=lr, weight_decay=weight_decay)
+
+    def step(self) -> None:
+        """
+        takes one step of both optimizers
+        """
+        self.muon.step()
+        self.adamw.step()
+
+    def zero_grad(self) -> None:
+        """
+        clears gradients of both optimizers
+        """
+        self.muon.zero_grad()
+        self.adamw.zero_grad()
+
+    def train(self) -> None:
+        """
+        puts training weights into parameters of schedule-free adamw, muon has only one set
+        """
+        self.adamw.train()
+
+    def eval(self) -> None:
+        """
+        puts averaged weights into parameters of schedule-free adamw, muon has only one set
+        """
+        self.adamw.eval()
+
+    def state_dict(self) -> list[dict]:
+        """
+        gives states of both optimizers, so a run can resume
+        """
+        return [self.muon.state_dict(), self.adamw.state_dict()]
+
+    def load_state_dict(self, state: list[dict]) -> None:
+        """
+        puts back states of both optimizers
+        """
+        self.muon.load_state_dict(state[0])
+        self.adamw.load_state_dict(state[1])
+
+
+def default_optimizer(
+    model: TabularFoundationModel, training: TrainingConfig
+) -> schedulefree.AdamWScheduleFree | MuonScheduleFree:
+    """
+    gives schedule-free adamw, or muon for hidden matrices with schedule-free adamw for the rest
+    """
+    if training.muon:
+        return MuonScheduleFree(model, lr=training.lr, weight_decay=training.weight_decay)
+    return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -167,7 +234,7 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
-    optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size))

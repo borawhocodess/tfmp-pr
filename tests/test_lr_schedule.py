@@ -32,6 +32,17 @@ def test_cosine_decays_from_lr_to_zero():
     assert learning_rate(ClassificationTrainingConfig(lr=1e-3, steps=10), 7) == 1e-3
 
 
+def test_warmup_rises_linearly_before_cosine():
+    """Warmup should rise from 0 to lr over its steps, then cosine should decay over the remaining steps."""
+    training = ClassificationTrainingConfig(lr=1e-3, steps=10, lr_schedule="cosine", warmup_proportion=0.2)
+
+    assert learning_rate(training, 0) == 0.0
+    assert math.isclose(learning_rate(training, 1), 5e-4)
+    assert learning_rate(training, 2) == 1e-3
+    assert math.isclose(learning_rate(training, 6), 5e-4)
+    assert math.isclose(learning_rate(training, 10), 0.0, abs_tol=1e-12)
+
+
 @pytest.mark.parametrize("muon", [False, True])
 def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
     """Every optimizer step should use the learning rate of the schedule at that step."""
@@ -40,7 +51,9 @@ def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
     monkeypatch.setattr(
         "schedulefree.AdamWScheduleFree.step", lambda self, *args: seen.append(self.param_groups[0]["lr"])
     )
-    training = ClassificationTrainingConfig(lr=1e-3, steps=4, eval_every=2, muon=muon, lr_schedule="cosine")
+    training = ClassificationTrainingConfig(
+        lr=1e-3, steps=4, eval_every=2, muon=muon, lr_schedule="cosine", warmup_proportion=0.5
+    )
     model = NanoTabPFNModel(
         config=NanoTabPFNClassifierConfig(
             embedding_size=16, num_attention_heads=2, mlp_hidden_size=32, num_layers=2, num_outputs=3
@@ -58,19 +71,22 @@ def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
     assert seen == [learning_rate(training, step) for step in range(4)]
 
 
-def test_unknown_schedule_is_rejected(tmp_path):
-    """A schedule other than constant or cosine should stop training before it starts."""
+@pytest.mark.parametrize(
+    ("settings", "message"), [({"lr_schedule": "linear"}, "schedule"), ({"warmup_proportion": 1.0}, "warmup")]
+)
+def test_unknown_schedule_is_rejected(tmp_path, settings, message):
+    """A schedule other than constant or cosine, or a warmup of all steps, should stop training before it starts."""
     model = NanoTabPFNModel(
         config=NanoTabPFNClassifierConfig(
             embedding_size=16, num_attention_heads=2, mlp_hidden_size=32, num_layers=2, num_outputs=3
         )
     )
-    with pytest.raises(ValueError, match="schedule"):
+    with pytest.raises(ValueError, match=message):
         pretrainTFM(
             "classification",
             model,
             RandomPrior(),
-            training=ClassificationTrainingConfig(steps=2, lr_schedule="linear"),
+            training=ClassificationTrainingConfig(steps=2, **settings),
             experiment=ClassificationExperimentConfig(experiments_dir=str(tmp_path)),
             device="cpu",
         )

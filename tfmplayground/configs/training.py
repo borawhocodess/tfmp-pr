@@ -17,6 +17,7 @@ class TrainingConfig(ABC):
     muon: bool = False
     weight_decay: float = 0.0
     lr_schedule: str = "constant"
+    warmup_proportion: float = 0.0
 
     @property
     @abstractmethod

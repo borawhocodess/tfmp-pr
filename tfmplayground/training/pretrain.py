@@ -194,10 +194,15 @@ def default_optimizer(
 
 def learning_rate(training: TrainingConfig, step: int) -> float:
     """
-    gives learning rate for step, constant or decaying from lr to 0 over all steps on a cosine
+    gives learning rate for step: linear warmup over warmup_proportion of steps, then constant, or decaying to 0 on a
+    cosine over the remaining steps
     """
+    warmup_steps = training.warmup_proportion * training.steps
+    if step < warmup_steps:
+        return training.lr * step / warmup_steps
     if training.lr_schedule == "cosine":
-        return training.lr * 0.5 * (1 + math.cos(math.pi * step / training.steps))
+        progress = (step - warmup_steps) / (training.steps - warmup_steps)
+        return training.lr * 0.5 * (1 + math.cos(math.pi * progress))
     return training.lr
 
 
@@ -252,6 +257,8 @@ def pretrainTFM(
         raise ValueError("eval_every must be at least 1")
     if training.lr_schedule not in ("constant", "cosine"):
         raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
+    if not 0 <= training.warmup_proportion < 1:
+        raise ValueError(f"warmup_proportion must be in [0, 1), not {training.warmup_proportion}")
     model.to(device)
     optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"

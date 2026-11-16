@@ -454,6 +454,7 @@ class Experiment:
             "numpy_rng": np.random.get_state(),
             "torch_rng": torch.get_rng_state(),
             "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "mps_rng": torch.mps.get_rng_state() if torch.backends.mps.is_available() else None,
         }
         temporary_path = self.resume_path.with_suffix(".tmp")
         torch.save(state, temporary_path)
@@ -474,6 +475,8 @@ class Experiment:
         torch.set_rng_state(state["torch_rng"])
         if state["cuda_rng"] is not None and torch.cuda.is_available():
             torch.cuda.set_rng_state_all(state["cuda_rng"])
+        if state["mps_rng"] is not None and torch.backends.mps.is_available():
+            torch.mps.set_rng_state(state["mps_rng"])
         self.best_score = state["best_score"]
         return state["step"]
 

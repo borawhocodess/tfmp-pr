@@ -117,74 +117,71 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
-class MuonAdamW:
+class MuonScheduleFree:
     """
-    muon for hidden matrices and adamw for every other parameter, with learning rate and weight decay shared
+    muon for hidden matrices and schedule-free adamw for every other parameter, with learning rate and weight decay
+    shared
     """
 
     def __init__(self, model: TabularFoundationModel, lr: float, weight_decay: float) -> None:
         """
-        splits parameters of model between muon and adamw
+        splits parameters of model between muon and schedule-free adamw
         """
         hidden = model.hidden_matrices()
         hidden_ids = {id(parameter) for parameter in hidden}
         rest = [parameter for parameter in model.parameters() if id(parameter) not in hidden_ids]
-        self.optimizers = []
-        if hidden:
-            muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
-            self.optimizers.append(muon)
-        if rest:
-            self.optimizers.append(torch.optim.AdamW(rest, lr=lr, weight_decay=weight_decay))
+        self.muon = torch.optim.Muon(hidden, lr=lr, weight_decay=weight_decay, adjust_lr_fn="match_rms_adamw")
+        self.adamw = schedulefree.AdamWScheduleFree(rest, lr=lr, weight_decay=weight_decay)
 
     def step(self) -> None:
         """
         takes one step of both optimizers
         """
-        for optimizer in self.optimizers:
-            optimizer.step()
+        self.muon.step()
+        self.adamw.step()
 
     def zero_grad(self) -> None:
         """
         clears gradients of both optimizers
         """
-        for optimizer in self.optimizers:
-            optimizer.zero_grad()
+        self.muon.zero_grad()
+        self.adamw.zero_grad()
 
     def train(self) -> None:
         """
-        does nothing, since only schedule-free optimizers keep separate weights for training
+        puts training weights into parameters of schedule-free adamw, muon has only one set
         """
+        self.adamw.train()
 
     def eval(self) -> None:
         """
-        does nothing, since only schedule-free optimizers keep separate weights for evaluation
+        puts averaged weights into parameters of schedule-free adamw, muon has only one set
         """
+        self.adamw.eval()
 
     def state_dict(self) -> list[dict]:
         """
         gives states of both optimizers, so a run can resume
         """
-        return [optimizer.state_dict() for optimizer in self.optimizers]
+        return [self.muon.state_dict(), self.adamw.state_dict()]
 
     def load_state_dict(self, state: list[dict]) -> None:
         """
         puts back states of both optimizers
         """
-        for optimizer, optimizer_state in zip(self.optimizers, state, strict=True):
-            optimizer.load_state_dict(optimizer_state)
+        self.muon.load_state_dict(state[0])
+        self.adamw.load_state_dict(state[1])
 
 
 def default_optimizer(
     model: TabularFoundationModel, training: TrainingConfig
-) -> schedulefree.AdamWScheduleFree | MuonAdamW:
+) -> schedulefree.AdamWScheduleFree | MuonScheduleFree:
     """
-    gives optimizer that training config names
+    gives schedule-free adamw, or muon for hidden matrices with schedule-free adamw for the rest
     """
-    if training.optimizer == "schedulefree_adamw":
-        return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
-    if training.optimizer == "muon":
-        return MuonAdamW(model, lr=training.lr, weight_decay=training.weight_decay)
-    raise ValueError(f"{training.optimizer!r} optimizer is not in (schedulefree_adamw, muon)")
+    if training.muon:
+        return MuonScheduleFree(model, lr=training.lr, weight_decay=training.weight_decay)
+    return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=training.weight_decay)
 
 
 def pretrainTFM(

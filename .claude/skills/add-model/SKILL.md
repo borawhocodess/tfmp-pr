@@ -158,6 +158,8 @@ class <Name>Model(<Upstream>, TabularFoundationModel):
     adapts <key> to tabularfoundationmodel interface
     """
 
+    block_modules = ("<list of transformer blocks>", ...)
+
     def __init__(self, config: <Name>ClassifierConfig | <Name>RegressorConfig) -> None:
         """
         builds <key> from config and reserves its borders
@@ -189,6 +191,10 @@ Rules:
 - Register `borders` with size `num_outputs + 1`, where `num_outputs` is the last dim of the output. The regression
   heads read the output count from it (`QuantileLoss(model.borders.numel() - 1)`) and `default_criterion` writes the
   fitted bucket borders into it.
+- Set the class attribute `block_modules` to the names of the `nn.ModuleList`s that hold the transformer blocks, for
+  example `block_modules = ("transformer_blocks",)`. `checkpoint_blocks()` wraps each block's `forward` for gradient
+  checkpointing, so upstream must call its blocks as `block(...)`. Add the model to the tiny configs in
+  `tests/test_checkpointing.py`.
 - `forward` takes `X_train (batch, train_rows, features)`, `y_train (batch, train_rows)`, `X_test (batch, test_rows,
   features)` and returns `(batch, test_rows, num_outputs)` as float32. Slice off train rows if upstream returns all rows.
   Keep the signature exactly as in `TabularFoundationModel`.

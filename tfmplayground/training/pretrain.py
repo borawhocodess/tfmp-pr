@@ -180,6 +180,8 @@ def pretrainTFM(
     ).to(device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
+    if training.gradient_checkpointing:
+        model.checkpoint_blocks()
     try:
         while step < training.steps:
             train_start_time = time.time()
@@ -239,6 +241,8 @@ def pretrainTFM(
     except KeyboardInterrupt:
         pass
     finally:
+        if training.gradient_checkpointing:
+            model.uncheckpoint_blocks()
         callback.close()
 
     return model

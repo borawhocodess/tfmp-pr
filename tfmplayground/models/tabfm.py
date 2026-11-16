@@ -11,6 +11,14 @@ class TabFMModel(TabFM, TabularFoundationModel):
     adapts tabfm to tabularfoundationmodel interface
     """
 
+    block_modules = (
+        "col_embedder.tf_col.blocks",
+        "col_embedder_2.tf_col.blocks",
+        "row_interactor.tf_row.blocks",
+        "row_interactor_2.tf_row.blocks",
+        "icl_predictor.tf_icl.blocks",
+    )
+
     def __init__(self, config: TabFMClassifierConfig | TabFMRegressorConfig) -> None:
         """
         builds tabfm from config and makes its fourier frequencies random

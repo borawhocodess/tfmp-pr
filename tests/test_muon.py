@@ -36,9 +36,9 @@ def test_io_modules_leave_hidden_matrices_to_muon(name):
     assert hidden
 
 
-def train(optimizer: str, experiments_dir) -> NanoTabPFNModel:
+def train(experiments_dir) -> NanoTabPFNModel:
     """
-    trains small classifier for 2 steps with optimizer
+    trains small classifier for 2 steps with muon
     """
     torch.manual_seed(0)
     model = NanoTabPFNModel(
@@ -54,7 +54,7 @@ def train(optimizer: str, experiments_dir) -> NanoTabPFNModel:
         "classification",
         model,
         RandomPrior(),
-        training=ClassificationTrainingConfig(steps=2, eval_every=2, optimizer=optimizer, weight_decay=0.01),
+        training=ClassificationTrainingConfig(steps=2, eval_every=2, muon=True, weight_decay=0.01),
         experiment=ClassificationExperimentConfig(experiments_dir=str(experiments_dir)),
         device="cpu",
     )
@@ -73,15 +73,9 @@ def test_muon_trains_every_parameter(tmp_path, monkeypatch):
             num_outputs=3,
         )
     ).state_dict()
-    trained = train("muon", tmp_path).state_dict()
+    trained = train(tmp_path).state_dict()
 
     for name, value in trained.items():
         assert torch.isfinite(value).all(), name
         if value.dtype.is_floating_point and name.endswith(("weight", "bias")):
             assert not torch.equal(value, initial[name]), name
-
-
-def test_unknown_optimizer_is_rejected(tmp_path):
-    """An optimizer other than schedulefree_adamw or muon should stop training before it starts."""
-    with pytest.raises(ValueError, match="optimizer"):
-        train("sgd", tmp_path)

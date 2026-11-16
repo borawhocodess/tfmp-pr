@@ -32,16 +32,15 @@ def test_cosine_decays_from_lr_to_zero():
     assert learning_rate(ClassificationTrainingConfig(lr=1e-3, steps=10), 7) == 1e-3
 
 
-@pytest.mark.parametrize("optimizer", ["schedulefree_adamw", "muon"])
-def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, optimizer):
+@pytest.mark.parametrize("muon", [False, True])
+def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
     """Every optimizer step should use the learning rate of the schedule at that step."""
     monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", lambda self, model, **kwargs: [0.5])
     seen = []
-    monkeypatch.setattr(torch.optim.AdamW, "step", lambda self, *args: seen.append(self.param_groups[0]["lr"]))
     monkeypatch.setattr(
         "schedulefree.AdamWScheduleFree.step", lambda self, *args: seen.append(self.param_groups[0]["lr"])
     )
-    training = ClassificationTrainingConfig(lr=1e-3, steps=4, eval_every=2, optimizer=optimizer, lr_schedule="cosine")
+    training = ClassificationTrainingConfig(lr=1e-3, steps=4, eval_every=2, muon=muon, lr_schedule="cosine")
     model = NanoTabPFNModel(
         config=NanoTabPFNClassifierConfig(
             embedding_size=16, num_attention_heads=2, mlp_hidden_size=32, num_layers=2, num_outputs=3

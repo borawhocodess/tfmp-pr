@@ -117,6 +117,81 @@ def default_criterion(
         return make_regression_decoder(model).to(device)
 
 
+class Optimizers:
+    """
+    steps several optimizers as one
+    """
+
+    def __init__(self, *optimizers: torch.optim.Optimizer) -> None:
+        """
+        keeps optimizers in order, which is also order of their saved states
+        """
+        self.optimizers = optimizers
+
+    def train(self) -> None:
+        """
+        turns on train mode of optimizers that have one
+        """
+        for optimizer in self.optimizers:
+            if hasattr(optimizer, "train"):
+                optimizer.train()
+
+    def eval(self) -> None:
+        """
+        turns on eval mode of optimizers that have one
+        """
+        for optimizer in self.optimizers:
+            if hasattr(optimizer, "eval"):
+                optimizer.eval()
+
+    def step(self) -> None:
+        """
+        updates weights of every optimizer
+        """
+        for optimizer in self.optimizers:
+            optimizer.step()
+
+    def zero_grad(self) -> None:
+        """
+        clears gradients of every optimizer
+        """
+        for optimizer in self.optimizers:
+            optimizer.zero_grad()
+
+    def state_dict(self) -> list[dict]:
+        """
+        gives state of every optimizer
+        """
+        return [optimizer.state_dict() for optimizer in self.optimizers]
+
+    def load_state_dict(self, states: list[dict]) -> None:
+        """
+        continues every optimizer from what state_dict gave
+        """
+        for optimizer, state in zip(self.optimizers, states, strict=True):
+            optimizer.load_state_dict(state)
+
+
+def default_optimizer(
+    model: TabularFoundationModel,
+    training: TrainingConfig,
+) -> torch.optim.Optimizer | Optimizers:
+    """
+    gives optimizer that training config asks for
+
+    with muon, 2d weights train with muon, and all other weights stay on schedule free adamw
+    """
+    if not training.muon:
+        return schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    matrices = [p for p in model.parameters() if p.ndim == 2]
+    others = [p for p in model.parameters() if p.ndim != 2]
+    return Optimizers(
+        # match_rms_adamw lets muon use learning rate that was tuned for adamw
+        torch.optim.Muon(matrices, lr=training.lr, weight_decay=0.0, adjust_lr_fn="match_rms_adamw"),
+        schedulefree.AdamWScheduleFree(others, lr=training.lr, weight_decay=0.0),
+    )
+
+
 def pretrainTFM(
     problem: str,
     model: TabularFoundationModel,
@@ -167,7 +242,7 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
-    optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
+    optimizer = default_optimizer(model, training)
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size))

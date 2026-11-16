@@ -167,6 +167,8 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
+    if training.gradient_checkpointing:
+        model.checkpoint_blocks()
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
     regression_task = not classification_task

@@ -14,6 +14,7 @@ class TrainingConfig(ABC):
     steps: int = 1_000_000
     eval_every: int = 100
     grad_clip: float = 1.0
+    gradient_checkpointing: bool = False
 
     @property
     @abstractmethod

@@ -206,6 +206,8 @@ class NanoTabICLModel(NanoTabICLv2, TabularFoundationModel):
     adapts vendored nanotabicl to tabularfoundationmodel interface
     """
 
+    block_modules = ("col_blocks", "row_blocks", "icl_blocks")
+
     def __init__(self, config: NanoTabICLClassifierConfig | NanoTabICLRegressorConfig) -> None:
         """
         builds vendored nanotabicl from config and reserves its borders

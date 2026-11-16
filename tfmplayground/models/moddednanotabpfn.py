@@ -214,6 +214,8 @@ class ModdedNanoTabPFNModel(ModdedNanoTabPFN, TabularFoundationModel):
     adapts moddednanotabpfn to tabularfoundationmodel interface
     """
 
+    block_modules = ("transformer_encoder.transformer_blocks",)
+
     def __init__(self, config: ModdedNanoTabPFNClassifierConfig | ModdedNanoTabPFNRegressorConfig) -> None:
         """
         builds moddednanotabpfn from config and reserves its borders

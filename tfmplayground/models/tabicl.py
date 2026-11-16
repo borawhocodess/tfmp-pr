@@ -11,6 +11,8 @@ class TabICLModel(TabICL, TabularFoundationModel):
     adapts tabicl to tabularfoundationmodel interface
     """
 
+    block_modules = ("col_embedder.tf_col.blocks", "row_interactor.tf_row.blocks", "icl_predictor.tf_icl.blocks")
+
     def __init__(self, config: TabICLClassifierConfig | TabICLRegressorConfig) -> None:
         """
         builds tabicl from config and reserves its borders

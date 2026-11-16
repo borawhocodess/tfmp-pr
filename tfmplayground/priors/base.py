@@ -18,6 +18,19 @@ class Prior(ABC):
         """
         ...
 
+    def state_dict(self) -> dict:
+        """
+        gives what prior needs to continue where it stopped, beyond global randomness
+        """
+        return {}
+
+    def load_state_dict(self, state: dict) -> None:
+        """
+        continues prior from what state_dict gave
+        """
+        if state:
+            raise ValueError(f"{type(self).__name__} keeps no state, not {sorted(state)}")
+
 
 class PriorDataLoader:
     """

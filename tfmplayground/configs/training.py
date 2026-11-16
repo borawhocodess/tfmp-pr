@@ -48,6 +48,7 @@ class ExperimentConfig(ABC):
 
     name: str = "test"
     experiments_dir: str = "workdir/experiments"
+    resume: str | None = None
 
     @property
     @abstractmethod

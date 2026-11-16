@@ -89,11 +89,12 @@ def default_criterion(
     prior: Prior,
     training: TrainingConfig,
     device: str | torch.device,
+    fit_borders: bool = True,
 ) -> nn.Module:
     """
     gives loss that matches problem
 
-    fits bucket borders from prior when regression head needs them
+    fits bucket borders from prior when regression head needs them, unless model already has its own
     """
     if problem == "classification":
         return nn.CrossEntropyLoss()
@@ -105,12 +106,13 @@ def default_criterion(
         if head == "buckets":
             if num_outputs < 2:
                 raise ValueError(f"{head!r} head needs more than 1 output, not {num_outputs}")
-            model.borders = make_bucket_borders(
-                prior=prior,
-                num_buckets=num_outputs,
-                batch_size=training.batch_size,
-                min_targets=training.bucket_borders_min_targets,
-            ).to(device)
+            if fit_borders:
+                model.borders = make_bucket_borders(
+                    prior=prior,
+                    num_buckets=num_outputs,
+                    batch_size=training.batch_size,
+                    min_targets=training.bucket_borders_min_targets,
+                ).to(device)
         model.config.head = head
         return make_regression_decoder(model).to(device)
 
@@ -158,7 +160,6 @@ def pretrainTFM(
     set_randomness_seed(training.seed)
     device = device if device is not None else get_default_device()
     eval = eval if eval is not None else EvaluationConfig()
-    criterion = default_criterion(problem, model, prior, training, device)
     callback = default_callback(problem, experiment, eval, device)
     experiment.log_configs(model=model.config, prior=prior.config, eval=eval, training=training)
 
@@ -167,14 +168,19 @@ def pretrainTFM(
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
     model.to(device)
-    criterion = criterion.to(device)
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
     regression_task = not classification_task
     batches = iter(PriorDataLoader(prior, training.batch_size))
+    step = 0
+    if experimentconfig.resume is not None:
+        step = experiment.load_resume(model, optimizer, prior)
+        experiment.log(f"resumed at step {step}", console=True)
+    criterion = default_criterion(
+        problem, model, prior, training, device, fit_borders=experimentconfig.resume is None
+    ).to(device)
 
     try:
-        step = 0
         while step < training.steps:
             train_start_time = time.time()
             model.train()  # Turn on the train mode
@@ -229,6 +235,7 @@ def pretrainTFM(
 
             callback.on_eval(step, end_time - train_start_time, mean_loss, model)
             experiment.save_checkpoints(model)
+            experiment.save_resume(model, optimizer, prior, step)
     except KeyboardInterrupt:
         pass
     finally:

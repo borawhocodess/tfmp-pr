@@ -166,8 +166,6 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
-    if training.precision not in ("float32", "bfloat16"):
-        raise ValueError(f"{training.precision!r} precision is not in (float32, bfloat16)")
     model.to(device)
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
@@ -206,9 +204,7 @@ def pretrainTFM(
                     if not torch.isfinite(y_train).all() or not torch.isfinite(y_test).all():
                         continue
 
-                with torch.autocast(
-                    torch.device(device).type, dtype=torch.bfloat16, enabled=training.precision == "bfloat16"
-                ):
+                with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=training.mixed_precision):
                     output = model(x_train, y_train, x_test)
                 output = output.float()
                 if not torch.isfinite(output).all():

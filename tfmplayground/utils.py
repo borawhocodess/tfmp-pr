@@ -383,17 +383,22 @@ class Experiment:
         opens directory for this run
         """
         self.started = datetime.now()
-        timestamp = self.started.strftime("%y%m%d-%H%M%S")
-        uid = uuid.uuid4().hex[:8]
-        name = config.name.strip()
-        self.id = f"{timestamp}-{uid}-{name}" if name else f"{timestamp}-{uid}"
-        self.dir = Path(config.experiments_dir) / config.problem / name / self.id
-        self.dir.mkdir(parents=True, exist_ok=True)
+        if config.resume is not None:
+            self.dir = Path(config.resume)
+            self.id = self.dir.name
+        else:
+            timestamp = self.started.strftime("%y%m%d-%H%M%S")
+            uid = uuid.uuid4().hex[:8]
+            name = config.name.strip()
+            self.id = f"{timestamp}-{uid}-{name}" if name else f"{timestamp}-{uid}"
+            self.dir = Path(config.experiments_dir) / config.problem / name / self.id
+            self.dir.mkdir(parents=True, exist_ok=True)
         self.log_path = self.dir / f"{self.id}-log.txt"
         self.score = None
         self.best_score = None
         self.best_checkpoint_path = self.dir / f"{self.id}-ckpt-best.pth"
         self.last_checkpoint_path = self.dir / f"{self.id}-ckpt-last.pth"
+        self.resume_path = self.dir / f"{self.id}-resume.pth"
 
     def log_configs(self, **configs) -> None:
         """
@@ -432,6 +437,48 @@ class Experiment:
             if self.best_score is None or self.score > self.best_score:
                 self.best_score = self.score
                 self.save_checkpoint(self.best_checkpoint_path, model)
+
+    def save_resume(
+        self, model: TabularFoundationModel, optimizer: torch.optim.Optimizer, prior: "Prior", step: int
+    ) -> None:
+        """
+        saves everything training needs to continue from step, so that interrupted write cannot lose earlier one
+        """
+        state = {
+            "step": step,
+            "best_score": self.best_score,
+            "model_state": model.state_dict(),
+            "optimizer_state": optimizer.state_dict(),
+            "prior_state": prior.state_dict(),
+            "python_rng": random.getstate(),
+            "numpy_rng": np.random.get_state(),
+            "torch_rng": torch.get_rng_state(),
+            "cuda_rng": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "mps_rng": torch.mps.get_rng_state() if torch.backends.mps.is_available() else None,
+        }
+        temporary_path = self.resume_path.with_suffix(".tmp")
+        torch.save(state, temporary_path)
+        os.replace(temporary_path, self.resume_path)
+
+    def load_resume(self, model: TabularFoundationModel, optimizer: torch.optim.Optimizer, prior: "Prior") -> int:
+        """
+        puts model, optimizer, prior and randomness back to saved step, and gives that step
+        """
+        if not self.resume_path.exists():
+            raise ValueError(f"{self.resume_path} does not exist, so run cannot resume")
+        state = torch.load(self.resume_path, map_location="cpu", weights_only=False)
+        model.load_state_dict(state["model_state"])
+        optimizer.load_state_dict(state["optimizer_state"])
+        prior.load_state_dict(state["prior_state"])
+        random.setstate(state["python_rng"])
+        np.random.set_state(state["numpy_rng"])
+        torch.set_rng_state(state["torch_rng"])
+        if state["cuda_rng"] is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(state["cuda_rng"])
+        if state["mps_rng"] is not None and torch.backends.mps.is_available():
+            torch.mps.set_rng_state(state["mps_rng"])
+        self.best_score = state["best_score"]
+        return state["step"]
 
     def log(self, s: str, console: bool = False) -> None:
         """

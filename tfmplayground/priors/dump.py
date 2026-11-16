@@ -36,6 +36,18 @@ class DumpPrior(Prior):
         self.device = device if device is not None else get_default_device()
         self.pointer = config.starting_index
 
+    def state_dict(self) -> dict:
+        """
+        gives position in dump
+        """
+        return {"pointer": self.pointer}
+
+    def load_state_dict(self, state: dict) -> None:
+        """
+        continues dump from saved position
+        """
+        self.pointer = state["pointer"]
+
     def check_batch_size(self, batch_size: int) -> None:
         """
         checks that every batch stays inside one dump block

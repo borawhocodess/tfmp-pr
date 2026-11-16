@@ -1,7 +1,11 @@
+import multiprocessing
+
 import numpy as np
 import pytest
 import torch
 
+from tfmplayground.configs.priors import TabICLClassificationPriorConfig
+from tfmplayground.priors import TabICLPrior
 from tfmplayground.priors.base import Prior, PriorDataLoader, seed_worker
 
 
@@ -51,3 +55,10 @@ def test_workers_reject_prior_with_state():
     """A prior that keeps state cannot be split over workers, since each worker would keep its own copy."""
     with pytest.raises(ValueError, match="keeps state"):
         PriorDataLoader(StatefulPrior(), batch_size=1, num_workers=2)
+
+
+def test_tabicl_prior_with_own_pool_is_rejected_in_workers(monkeypatch):
+    """TabICL's own process pool cannot start inside a daemon worker, so the prior should say how to fix it."""
+    monkeypatch.setattr(multiprocessing.current_process(), "daemon", True)
+    with pytest.raises(ValueError, match="n_jobs=1"):
+        TabICLPrior(config=TabICLClassificationPriorConfig(n_jobs=2)).build_sampler(1)

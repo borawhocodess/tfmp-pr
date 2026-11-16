@@ -1,5 +1,7 @@
 """DataLoader and configuration for TabICL-based priors."""
 
+import multiprocessing
+
 import torch
 from tabicl.prior import PriorDataset as TabICLPriorDataset
 from tabicl.prior.graph_lib._config import PriorConfig as TabICLPriorDatasetConfig
@@ -103,8 +105,12 @@ class TabICLPrior(Prior):
     def build_sampler(self, batch_size: int) -> None:
         """
         builds tabicl from config and remembers its batch size
+
+        prior workers are daemon processes, which cannot start the pool tabicl uses for n_jobs other than 1
         """
         c = self.config
+        if c.n_jobs != 1 and multiprocessing.current_process().daemon:
+            raise ValueError(f"tabicl prior with n_jobs={c.n_jobs} cannot run in prior workers, set n_jobs=1")
         self.sampler = TabICLPriorDataset(
             regression=c.problem == "regression",
             batch_size=batch_size,

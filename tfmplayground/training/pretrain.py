@@ -170,7 +170,7 @@ def pretrainTFM(
     optimizer = schedulefree.AdamWScheduleFree(model.parameters(), lr=training.lr, weight_decay=0.0)
     classification_task = problem == "classification"
     regression_task = not classification_task
-    batches = iter(PriorDataLoader(prior, training.batch_size))
+    batches = iter(PriorDataLoader(prior, training.batch_size, training.prior_workers))
     step = 0
     if experimentconfig.resume is not None:
         step = experiment.load_resume(model, optimizer, prior)

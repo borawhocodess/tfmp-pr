@@ -51,7 +51,8 @@ def train(batch_size: int, accumulation_steps: int, experiments_dir) -> NanoTabP
 
 
 def test_accumulated_batches_match_one_larger_batch(tmp_path, monkeypatch):
-    """Two batches of 1 table with accumulation should give the gradients and weights of one batch of 2 tables."""
+    """Two batches of 1 table with accumulation should give the gradients, logged loss and weights of one batch of 2
+    tables."""
     monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "evaluate", lambda self, model, **kwargs: [0.5])
     gradients = []
     step = schedulefree.AdamWScheduleFree.step
@@ -61,10 +62,20 @@ def test_accumulated_batches_match_one_larger_batch(tmp_path, monkeypatch):
         return step(self, *args)
 
     monkeypatch.setattr(schedulefree.AdamWScheduleFree, "step", recording_step)
+    losses = []
+    on_eval = ClassifierExperimentEvaluationCallback.on_eval
+
+    def recording_on_eval(self, step, train_time, loss, model, **kwargs):
+        losses.append(loss)
+        return on_eval(self, step, train_time, loss, model, **kwargs)
+
+    monkeypatch.setattr(ClassifierExperimentEvaluationCallback, "on_eval", recording_on_eval)
     larger = train(2, 1, tmp_path).state_dict()
     accumulated = train(1, 2, tmp_path).state_dict()
 
     assert len(gradients) == 4
+    assert len(losses) == 2
+    assert abs(losses[1] - losses[0]) < 1e-5
     for a, b in zip(gradients[:2], gradients[2:], strict=True):
         for x, y in zip(a, b, strict=True):
             torch.testing.assert_close(y, x)

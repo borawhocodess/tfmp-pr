@@ -15,6 +15,7 @@ class TrainingConfig(ABC):
     eval_every: int = 100
     grad_clip: float = 1.0
     precision: str = "float32"
+    prior_workers: int = 0
 
     @property
     @abstractmethod

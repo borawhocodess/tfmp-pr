@@ -226,3 +226,45 @@ class TabFMRegressorConfig(TabFMModelConfig):
     is_classifier: bool = False
     head: str = "scalar"
     decoder_out: int = 1
+
+
+@dataclass
+class KumoModelConfig:
+    """
+    settings kumo models share, defaults from the small kumo tabular model
+    """
+
+    cell_channels: int = 128
+    num_embedding_layers: int = 4
+    num_embedding_heads: int = 4
+    num_inducing_points: int = 128
+    group_size: int = 3
+    num_frequencies: int = 32
+    num_readout_tokens: int = 4
+    icl_channels: int = 512
+    num_icl_layers: int = 12
+    num_icl_heads: int = 8
+    num_icl_key_value_heads_for_query: int | None = None
+
+
+@dataclass
+class KumoClassifierConfig(KumoModelConfig):
+    """
+    kumo settings for classification
+    """
+
+    problem: str = "classification"
+    num_classes: int = 10
+    num_quantiles: int = 0
+
+
+@dataclass
+class KumoRegressorConfig(KumoModelConfig):
+    """
+    kumo settings for regression
+    """
+
+    problem: str = "regression"
+    head: str = "quantiles"
+    num_classes: int = 0
+    num_quantiles: int = 999

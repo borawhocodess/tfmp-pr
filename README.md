@@ -58,6 +58,7 @@ Each one is an adapter over upstream code, with a classifier and a regressor con
 - nanotabicl - [adapter](tfmplayground/models/nanotabicl.py) · [config](tfmplayground/configs/models.py) · [repo](https://github.com/soda-inria/nanotabicl)
 - tabicl - [adapter](tfmplayground/models/tabicl.py) · [config](tfmplayground/configs/models.py) · [repo](https://github.com/soda-inria/tabicl) · [paper](https://arxiv.org/abs/2602.11139)
 - tabfm - [adapter](tfmplayground/models/tabfm.py) · [config](tfmplayground/configs/models.py) · [repo](https://github.com/google-research/tabfm) · [paper](https://arxiv.org/abs/2609.37959)
+- kumo - [adapter](tfmplayground/models/kumo.py) · [config](tfmplayground/configs/models.py) · [repo](https://github.com/NVIDIA/structured-data-models) · [paper](https://arxiv.org/abs/2611.23001)
 
 ### Priors
 

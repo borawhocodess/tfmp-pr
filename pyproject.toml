@@ -30,6 +30,7 @@ dependencies = [
     "tabicl[pretrain] @ git+https://github.com/soda-inria/tabicl.git@8f1aa2098c894ab91dba15209cf2002ba4be6c6c",
     "ticl @ git+https://github.com/microsoft/ticl.git@3c36d9c1785844d5e983b0baf0ef4116670aa809",
     "tabpfn-v1-prior @ git+https://github.com/automl/tabpfn-v1-prior.git@778f0d0eb10f35ca85964fbc27ecb8baee9146a4",
+    "structured-data-models @ git+https://github.com/NVIDIA/structured-data-models.git@c17f88f12e57d24d695f5b9b9be41afa4eb05446",
     "interpret-core",  # ticl
     "mlflow",  # ticl
     "wandb>=0.20",  # ticl
@@ -68,6 +69,10 @@ ignore = [
     "E701",  # multiple statements on one line
     "UP045", # non-pep604 annotation optional
 ]
+"tfmplayground/priors/kumo.py" = [
+    "E402",  # imports of the adapter below the vendored code
+    "I001",  # import order of the vendored code
+]
 "tfmplayground/priors/nanotabicl.py" = [
     "B905",  # zip without an explicit strict
     "E501",  # line too long
@@ -79,6 +84,7 @@ indent-style = "space"
 exclude = [
     "tfmplayground/models/moddednanotabpfn.py",
     "tfmplayground/models/nanotabicl.py",
+    "tfmplayground/priors/kumo.py",
     "tfmplayground/priors/nanotabicl.py",
 ]
 

@@ -39,6 +39,40 @@ class NanoTabICLRegressionPriorConfig(NanoTabICLPriorConfig):
 
 
 @dataclass
+class KumoPriorConfig:
+    """
+    settings kumo priors share, defaults from stage 1 of the kumo tabular training recipe
+    """
+
+    min_num_datapoints: int = 1024
+    max_num_datapoints: int = 1024
+    min_num_features: int = 2
+    max_num_features: int = 100
+    min_train_fraction: float = 0.3
+    max_train_fraction: float = 0.9
+
+
+@dataclass
+class KumoClassificationPriorConfig(KumoPriorConfig):
+    """
+    kumo prior settings for classification
+    """
+
+    problem: str = "classification"
+    max_num_classes: int = 10
+
+
+@dataclass
+class KumoRegressionPriorConfig(KumoPriorConfig):
+    """
+    kumo prior settings for regression
+    """
+
+    problem: str = "regression"
+    max_num_classes: int = 0
+
+
+@dataclass
 class TabICLPriorConfig:
     """
     settings tabicl priors share

@@ -195,7 +195,7 @@ def default_optimizer(
 def learning_rate(training: TrainingConfig, step: int) -> float:
     """
     gives learning rate for step: linear warmup over warmup_proportion of steps, then constant, or decaying to 0 on a
-    cosine over the remaining steps
+    cosine over the remaining steps, or wsd: constant until the last decay_proportion of steps, then linear to 0
     """
     warmup_steps = training.warmup_proportion * training.steps
     if step < warmup_steps:
@@ -203,6 +203,9 @@ def learning_rate(training: TrainingConfig, step: int) -> float:
     if training.lr_schedule == "cosine":
         progress = (step - warmup_steps) / (training.steps - warmup_steps)
         return training.lr * 0.5 * (1 + math.cos(math.pi * progress))
+    decay_steps = training.decay_proportion * training.steps
+    if training.lr_schedule == "wsd" and step > training.steps - decay_steps:
+        return training.lr * (training.steps - step) / decay_steps
     return training.lr
 
 
@@ -255,12 +258,14 @@ def pretrainTFM(
         raise ValueError("steps must be at least 1")
     if training.eval_every < 1:
         raise ValueError("eval_every must be at least 1")
-    if training.lr_schedule not in ("constant", "cosine"):
-        raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine)")
+    if training.lr_schedule not in ("constant", "cosine", "wsd"):
+        raise ValueError(f"{training.lr_schedule!r} learning rate schedule is not in (constant, cosine, wsd)")
     if not 0 <= training.warmup_proportion < 1:
         raise ValueError(f"warmup_proportion must be in [0, 1), not {training.warmup_proportion}")
     if training.accumulation_steps < 1:
         raise ValueError("accumulation_steps must be at least 1")
+    if training.lr_schedule == "wsd" and not 0 < training.decay_proportion <= 1 - training.warmup_proportion:
+        raise ValueError(f"decay_proportion must be in (0, 1 - warmup_proportion], not {training.decay_proportion}")
     model.to(device)
     if training.gradient_checkpointing:
         model.checkpoint_blocks()

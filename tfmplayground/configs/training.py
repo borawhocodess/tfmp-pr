@@ -22,6 +22,7 @@ class TrainingConfig(ABC):
     warmup_proportion: float = 0.0
     accumulation_steps: int = 1
     gradient_checkpointing: bool = False
+    decay_proportion: float = 0.0
 
     @property
     @abstractmethod

@@ -43,6 +43,19 @@ def test_warmup_rises_linearly_before_cosine():
     assert math.isclose(learning_rate(training, 10), 0.0, abs_tol=1e-12)
 
 
+def test_wsd_stays_constant_then_decays_linearly():
+    """Wsd should rise over the warmup, stay at lr, then fall linearly to 0 over the last decay_proportion of steps."""
+    training = ClassificationTrainingConfig(
+        lr=1e-3, steps=10, lr_schedule="wsd", warmup_proportion=0.2, decay_proportion=0.4
+    )
+
+    assert math.isclose(learning_rate(training, 1), 5e-4)
+    assert learning_rate(training, 2) == 1e-3
+    assert learning_rate(training, 6) == 1e-3
+    assert math.isclose(learning_rate(training, 8), 5e-4)
+    assert learning_rate(training, 10) == 0.0
+
+
 @pytest.mark.parametrize("muon", [False, True])
 def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
     """Every optimizer step should use the learning rate of the schedule at that step."""
@@ -72,10 +85,19 @@ def test_training_sets_scheduled_learning_rate(tmp_path, monkeypatch, muon):
 
 
 @pytest.mark.parametrize(
-    ("settings", "message"), [({"lr_schedule": "linear"}, "schedule"), ({"warmup_proportion": 1.0}, "warmup")]
+    ("settings", "message"),
+    [
+        ({"lr_schedule": "linear"}, "schedule"),
+        ({"warmup_proportion": 1.0}, "warmup"),
+        ({"lr_schedule": "wsd"}, "decay"),
+        ({"lr_schedule": "wsd", "warmup_proportion": 0.5, "decay_proportion": 0.6}, "decay"),
+    ],
 )
 def test_unknown_schedule_is_rejected(tmp_path, settings, message):
-    """A schedule other than constant or cosine, or a warmup of all steps, should stop training before it starts."""
+    """
+    A schedule other than constant, cosine or wsd, a warmup of all steps, or a wsd decay that is empty or overlaps the
+    warmup should stop training before it starts.
+    """
     model = NanoTabPFNModel(
         config=NanoTabPFNClassifierConfig(
             embedding_size=16, num_attention_heads=2, mlp_hidden_size=32, num_layers=2, num_outputs=3

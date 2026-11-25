@@ -67,6 +67,7 @@ Priors generate the synthetic tables for pretraining.
 
 Each batch is sampled when the training loop asks for it.
 
+- kumo - [adapter](tfmplayground/priors/kumo.py) · [config](tfmplayground/configs/priors.py) · [repo](https://github.com/NVIDIA/structured-data-models) · [paper](https://arxiv.org/abs/2611.23001)
 - nanotabicl - [adapter](tfmplayground/priors/nanotabicl.py) · [config](tfmplayground/configs/priors.py) · [repo](https://github.com/soda-inria/nanotabicl)
 - tabicl - [adapter](tfmplayground/priors/tabicl.py) · [config](tfmplayground/configs/priors.py) · [repo](https://github.com/soda-inria/tabicl) · [paper](https://arxiv.org/abs/2602.11139)
 

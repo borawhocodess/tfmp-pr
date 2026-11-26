@@ -416,6 +416,8 @@ def make_prior(
     )
 
 
+import math
+
 import torch
 from sdm import Stype
 from sdm.prior import should_drop
@@ -491,7 +493,9 @@ class KumoPrior(Prior):
         """
         c = self.config
         self.num_features = int(torch.randint(c.min_num_features, c.max_num_features + 1, ()))
-        self.num_datapoints = int(torch.randint(c.min_num_datapoints, c.max_num_datapoints + 1, ()))
+        low, high = c.min_num_datapoints, c.max_num_datapoints
+        # log-uniform like their training loader (train/kumo/tabular/loader.py)
+        self.num_datapoints = low if low == high else int(torch.empty(()).uniform_(math.log(low), math.log(high)).exp())
         fraction = c.min_train_fraction + float(torch.rand(())) * (c.max_train_fraction - c.min_train_fraction)
         self.sep = min(max(int(self.num_datapoints * fraction), 1), self.num_datapoints - 1)
         classification = self.problem == "classification"

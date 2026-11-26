@@ -49,6 +49,20 @@ def test_every_test_class_is_in_the_train_part():
             assert len(train.unique()) >= 2 and train.max() < config.max_num_classes
 
 
+def test_row_count_is_log_uniform():
+    """Row counts should be log-uniform like the kumo training loader, so their median is near the geometric mean."""
+    torch.manual_seed(0)
+    config = KumoClassificationPriorConfig(min_num_datapoints=400, max_num_datapoints=10240)
+    prior = KumoPrior(config=config, device="cpu")
+    counts = []
+    for _ in range(2000):
+        prior.batch_hyperparameters()
+        counts.append(prior.num_datapoints)
+
+    assert min(counts) >= 400 and max(counts) <= 10240
+    assert 1600 < torch.tensor(counts).float().median() < 2500
+
+
 @pytest.mark.parametrize(
     "config",
     [

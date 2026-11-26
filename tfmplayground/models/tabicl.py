@@ -1,9 +1,23 @@
 import torch
 from tabicl._model.inference_config import InferenceConfig
+from tabicl._model.ssmax import QASSMaxMLP
 from tabicl._model.tabicl import TabICL
 
 from tfmplayground.configs.models import TabICLClassifierConfig, TabICLRegressorConfig
 from tfmplayground.models.base import TabularFoundationModel
+
+
+class Float32QASSMaxMLP(QASSMaxMLP):
+    """
+    qassmax that runs in float32 under autocast, since its scales grow in bfloat16 until training does not recover
+    """
+
+    def forward(self, q: torch.Tensor, n: int) -> torch.Tensor:
+        """
+        scales queries in float32 and gives them back in their dtype
+        """
+        with torch.autocast(q.device.type, enabled=False):
+            return super().forward(q.float(), n).to(q.dtype)
 
 
 class TabICLModel(TabICL, TabularFoundationModel):
@@ -53,6 +67,21 @@ class TabICLModel(TabICL, TabularFoundationModel):
             recompute=config.recompute,
         )
         self.register_buffer("borders", torch.zeros(config.num_quantiles + 1))
+        for module in self.modules():
+            if type(module) is QASSMaxMLP:
+                module.__class__ = Float32QASSMaxMLP
+
+    def hidden_matrices(self) -> list[torch.nn.Parameter]:
+        """
+        gives hidden matrices without the qassmax mlps, which schedule-free adamw trains instead of muon
+        """
+        qassmax = {
+            id(parameter)
+            for module in self.modules()
+            if isinstance(module, QASSMaxMLP)
+            for parameter in module.parameters()
+        }
+        return [parameter for parameter in super().hidden_matrices() if id(parameter) not in qassmax]
 
     def forward(
         self,

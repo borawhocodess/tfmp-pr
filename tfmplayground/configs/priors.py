@@ -136,3 +136,37 @@ class RegressionPriorDumpConfig(PriorDumpConfig):
 
     problem: str = "regression"
     filename: str = "50x3_1280k_regression.h5"
+
+
+@dataclass
+class SCMPriorConfig:
+    """
+    settings scm priors share, defaults follow the tabpfnv2 ranges where a split leaves enough train rows
+    """
+
+    min_num_datapoints: int = 20
+    max_num_datapoints: int = 2048
+    min_num_features: int = 1
+    max_num_features: int = 160
+    min_train_fraction: float = 0.1
+    max_train_fraction: float = 0.9
+
+
+@dataclass
+class SCMClassificationPriorConfig(SCMPriorConfig):
+    """
+    scm prior settings for classification
+    """
+
+    problem: str = "classification"
+    min_num_datapoints: int = 100
+    max_num_classes: int = 10
+
+
+@dataclass
+class SCMRegressionPriorConfig(SCMPriorConfig):
+    """
+    scm prior settings for regression
+    """
+
+    problem: str = "regression"

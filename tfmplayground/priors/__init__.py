@@ -2,6 +2,7 @@ from .base import Prior, PriorDataLoader
 from .dump import DumpPrior, PriorDumpDataLoader
 from .kumo import KumoPrior
 from .nanotabicl import NanoTabICLPrior
+from .scm import SCMPrior
 from .tabicl import TabICLPrior, TabICLPriorDataLoader
 from .tabpfn import TabPFNPriorDataLoader, build_tabpfn_prior
 from .ticl import TICLPriorDataLoader, build_ticl_prior
@@ -13,6 +14,7 @@ __all__ = [
     "PriorDumpDataLoader",
     "KumoPrior",
     "NanoTabICLPrior",
+    "SCMPrior",
     "TabICLPrior",
     "TabICLPriorDataLoader",
     "TICLPriorDataLoader",

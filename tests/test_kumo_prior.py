@@ -82,3 +82,32 @@ def test_prior_trains_a_model(tmp_path, monkeypatch):
         experiment=ClassificationExperimentConfig(experiments_dir=str(tmp_path)),
         device="cpu",
     )
+
+
+@pytest.mark.parametrize("problem_config", [KumoClassificationPriorConfig, KumoRegressionPriorConfig])
+def test_missing_values_become_mean_and_indicators(problem_config):
+    """With missing_values, batches stay finite and some tables get indicator columns beyond the sampled features."""
+    torch.manual_seed(0)
+    config = problem_config(min_num_datapoints=100, max_num_datapoints=150, max_num_features=8, missing_values=True)
+    prior = KumoPrior(config=config, device="cpu")
+    widened = 0
+    for _ in range(10):
+        x_train, y_train, x_test, y_test = prior.batch(2)
+        assert all(torch.isfinite(t).all() for t in (x_train, y_train, x_test, y_test))
+        assert x_train.shape[2] <= 2 * prior.num_features
+        widened += x_train.shape[2] > prior.num_features
+    assert widened > 0
+
+
+def test_missing_cells_are_imputed_before_scaling():
+    """Missing cells count in the feature scale at the train mean, as with mean imputation and then StandardScaler."""
+    torch.manual_seed(0)
+    prior = KumoPrior(config=KumoClassificationPriorConfig(missing_values=True), device="cpu")
+    prior.batch_hyperparameters = lambda: setattr(prior, "num_datapoints", 5) or setattr(prior, "sep", 4)
+    prior.num_features = 1
+    table = torch.tensor([[0.0], [2.0], [torch.nan], [torch.nan], [1.0]]), torch.tensor([0, 1, 0, 1, 0])
+    prior.dataset = lambda: table
+    x_train, _, x_test, _ = prior.batch(1)
+    expected = torch.tensor([-(2**0.5), 2**0.5, 0.0, 0.0])
+    torch.testing.assert_close(x_train[0, :, 0], expected, atol=1e-4, rtol=0)
+    torch.testing.assert_close(x_train[0, :, 1], torch.tensor([-1.0, -1.0, 1.0, 1.0]), atol=1e-4, rtol=0)

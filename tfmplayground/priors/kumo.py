@@ -448,8 +448,9 @@ def _robust_probe_target(y: torch.Tensor) -> torch.Tensor:
 
 class KumoPrior(Prior):
     """
-    adapts the kumo tabular prior to prior interface, with the stage 1 settings of its training recipe and no missing
-    values
+    adapts the kumo tabular prior to prior interface, with the stage 1 settings of its training recipe; with
+    missing_values, missing cells come out like TabularClassifier preprocesses them: the train mean (0 after
+    standardizing) plus one indicator column for every feature that misses cells in the train part
     """
 
     def __init__(
@@ -472,17 +473,21 @@ class KumoPrior(Prior):
         if self.problem == "classification" and config.max_num_classes < 2:
             raise ValueError(f"classification needs at least 2 classes, not {config.max_num_classes}")
         self.task = Task.classification if self.problem == "classification" else Task.regression
+        # without missing_values the four missingness probabilities are 0, with it they keep the recipe defaults
+        missingness = {} if config.missing_values else dict(
+            structured_missingness_prob=0.0,
+            mcar_missingness_prob=0.0,
+            near_empty_missingness_prob=0.0,
+            latent_driver_missingness_prob=0.0,
+        )
         self.prior = make_prior(
             self.task,
             relabel_prob=0.0,
             coarsen_prob=0.0,
             high_cardinality_prob=0.0,
             y_heavy_tail_prob=0.0,
-            structured_missingness_prob=0.0,
-            mcar_missingness_prob=0.0,
-            near_empty_missingness_prob=0.0,
-            latent_driver_missingness_prob=0.0,
             softmax_argmax_prob=0.0,
+            **missingness,
         )
 
     def batch_hyperparameters(self) -> None:
@@ -546,14 +551,24 @@ class KumoPrior(Prior):
 
     def batch(self, batch_size: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        stacks sampled tables into one batch, pads features to shared width, standardizes them on train rows and
+        stacks sampled tables into one batch, adds a missing indicator for every feature that misses train cells,
+        pads features to shared width, puts missing cells at their train mean, standardizes features on train rows and
         splits at train test index
         """
         self.batch_hyperparameters()
         tables = [self.dataset() for _ in range(batch_size)]
-        x = torch.zeros(batch_size, self.num_datapoints, self.num_features)
-        for i, (features, _) in enumerate(tables):
-            x[i, :, : features.size(-1)] = features
+        columns = []
+        for features, _ in tables:
+            missing = features.isnan()
+            indicators = missing[:, missing[: self.sep].any(dim=0)].to(features.dtype)
+            columns.append(torch.cat((features, indicators), dim=-1))
+        x = torch.zeros(batch_size, self.num_datapoints, max(self.num_features, *(c.size(-1) for c in columns)))
+        for i, table in enumerate(columns):
+            x[i, :, : table.size(-1)] = table
+        # missing cells take the train mean of their column before standardizing, like the mean imputation that
+        # TabularClassifier runs before its StandardScaler, so imputed cells count in the scale as they do there
+        mean = x[:, : self.sep].nanmean(dim=1, keepdim=True).nan_to_num(nan=0.0)
+        x = torch.where(x.isnan(), mean, x)
         x = _standardize_features(x, self.sep).to(self.device)
         y = torch.stack([target.float() for _, target in tables]).to(self.device)
         return x[:, : self.sep], y[:, : self.sep], x[:, self.sep :], y[:, self.sep :]

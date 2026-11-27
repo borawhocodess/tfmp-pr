@@ -121,7 +121,8 @@ class ExperimentCallback(BaseLoggerCallback):
         """
         records progress since last eval
         """
-        self.experiment.log(f"step {step} | train time {train_time:.2f}s | mean loss {loss:.2f}")
+        skipped = kwargs.get("skipped", 0)
+        self.experiment.log(f"step {step} | train time {train_time:.2f}s | mean loss {loss:.2f} | skipped {skipped}")
 
     def close(self) -> None:
         """
@@ -188,6 +189,7 @@ class ExperimentEvaluationCallback(ExperimentCallback):
             f"mean loss {loss:.2f}",
             f"{self.metric} {mean:.2f}",
             f"tasks {len(scores)}",
+            f"skipped {kwargs.get('skipped', 0)}",
         ]
         line = " | ".join(fields)
         self.experiment.log(line, console=True)

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer, LabelEncoder, OrdinalEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, LabelEncoder, OrdinalEncoder, QuantileTransformer, StandardScaler
 
 from tfmplayground.models import TabularFoundationModel
 from tfmplayground.utils import get_default_device, make_regression_decoder
@@ -76,17 +76,32 @@ def get_feature_preprocessor(X: np.ndarray | pd.DataFrame) -> Pipeline:
 
 
 class TabularClassifier:
-    """scikit-learn like interface"""
+    """
+    scikit-learn like interface
+
+    with n_estimators > 1, predict_proba averages several forward passes; estimator 0 sees the data as it is, every
+    other estimator sees its own feature order and class shift, and every odd one sees quantile-normalized features,
+    like the column/class shuffles and preprocessors that tabicl and tabpfn ensemble over. with max_context, every
+    estimator takes its own random subset of at most max_context train rows as context
+    """
 
     def __init__(
         self,
         model: TabularFoundationModel,
         device: None | str | torch.device = None,
+        n_estimators: int = 1,
+        max_context: int | None = None,
+        seed: int = 0,
     ):
         if device is None:
             device = get_default_device()
+        if n_estimators < 1:
+            raise ValueError(f"n_estimators must be at least 1, not {n_estimators}")
         self.model = model.to(device)
         self.device = device
+        self.n_estimators = n_estimators
+        self.max_context = max_context
+        self.seed = seed
 
     def fit(self, X_train: np.ndarray, y_train: np.ndarray):
         """stores X_train and y_train for later use, also computes the highest class number occuring in num_classes"""
@@ -104,24 +119,52 @@ class TabularClassifier:
 
     def predict_proba(self, X_test: np.ndarray) -> np.ndarray:
         """
-        creates (x,y), runs it through our PyTorch Model, cuts off the classes that didn't appear in the training data
-        and applies softmax to get the probabilities
+        averages class probabilities of n_estimators forward passes, each cut to the classes seen in training
         """
         X_test = self.feature_preprocessor.transform(X_test)
+        probabilities = [self.estimator_proba(X_test, i) for i in range(self.n_estimators)]
+        return np.mean(probabilities, axis=0)
+
+    def estimator_proba(self, X_test: np.ndarray, i: int) -> np.ndarray:
+        """
+        runs estimator i: picks its context rows, feature order, preprocessing and class shift, runs the model, applies
+        softmax and undoes the class shift
+        """
+        rng = np.random.default_rng(self.seed + i)
+        X_train, y_train = self.X_train, self.y_train
+        if self.max_context is not None and len(X_train) > self.max_context:
+            if self.max_context < self.num_classes:
+                raise ValueError(f"max_context {self.max_context} cannot hold all {self.num_classes} classes")
+            # one row of every class first, so models whose outputs follow the context classes (tabicl) see them all
+            first = np.array([rng.choice(np.flatnonzero(y_train == c)) for c in range(self.num_classes)])
+            rest = np.setdiff1d(np.arange(len(X_train)), first)
+            rows = np.concatenate([first, rng.choice(rest, self.max_context - len(first), replace=False)])
+            X_train, y_train = X_train[rows], y_train[rows]
+        if i > 0:
+            features = rng.permutation(X_train.shape[1])
+            X_train, X_test = X_train[:, features], X_test[:, features]
+        if i % 2 == 1:
+            quantiles = QuantileTransformer(
+                n_quantiles=min(1000, len(X_train)), output_distribution="normal", random_state=self.seed + i
+            )
+            X_train, X_test = quantiles.fit_transform(X_train), quantiles.transform(X_test)
+        shift = i % self.num_classes
+        y_train = (y_train + shift) % self.num_classes
         self.model.eval()
         with torch.no_grad():
             # introduce batch size 1
-            X_train = torch.from_numpy(self.X_train).unsqueeze(0).to(torch.float).to(self.device)
+            X_train = torch.from_numpy(X_train).unsqueeze(0).to(torch.float).to(self.device)
             X_test = torch.from_numpy(X_test).unsqueeze(0).to(torch.float).to(self.device)
-            y_train = torch.from_numpy(self.y_train).unsqueeze(0).to(torch.float).to(self.device)
+            y_train = torch.from_numpy(y_train).unsqueeze(0).to(torch.float).to(self.device)
             out = self.model(X_train, y_train, X_test).squeeze(0)  # remove batch size 1
             if out.shape[-1] < self.num_classes:
                 raise ValueError(f"model has {out.shape[-1]} outputs, data has {self.num_classes} classes")
             # our pretrained classifier supports up to num_outputs classes, if the dataset has less we cut off the rest
-            out = out[:, : self.num_classes]
+            out = out[:, : self.num_classes].float()
             # apply softmax to get a probability distribution
-            probabilities = F.softmax(out, dim=1)
-            return probabilities.to("cpu").numpy()
+            probabilities = F.softmax(out, dim=1).to("cpu").numpy()
+        # class c was shown to the model as class (c + shift) % num_classes
+        return probabilities[:, (np.arange(self.num_classes) + shift) % self.num_classes]
 
 
 class TabularRegressor:

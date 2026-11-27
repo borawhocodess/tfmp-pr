@@ -41,7 +41,8 @@ class NanoTabICLRegressionPriorConfig(NanoTabICLPriorConfig):
 @dataclass
 class KumoPriorConfig:
     """
-    settings kumo priors share, defaults from stage 1 of the kumo tabular training recipe
+    settings kumo priors share, defaults from stage 1 of the kumo tabular training recipe; missing_values turns on the
+    four missingness patterns of the recipe
     """
 
     min_num_datapoints: int = 1024
@@ -50,6 +51,7 @@ class KumoPriorConfig:
     max_num_features: int = 100
     min_train_fraction: float = 0.3
     max_train_fraction: float = 0.9
+    missing_values: bool = False
 
 
 @dataclass

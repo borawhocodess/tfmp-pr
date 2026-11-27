@@ -133,13 +133,20 @@ class TabularClassifier:
         rng = np.random.default_rng(self.seed + i)
         X_train, y_train = self.X_train, self.y_train
         if self.max_context is not None and len(X_train) > self.max_context:
-            rows = rng.choice(len(X_train), self.max_context, replace=False)
+            if self.max_context < self.num_classes:
+                raise ValueError(f"max_context {self.max_context} cannot hold all {self.num_classes} classes")
+            # one row of every class first, so models whose outputs follow the context classes (tabicl) see them all
+            first = np.array([rng.choice(np.flatnonzero(y_train == c)) for c in range(self.num_classes)])
+            rest = np.setdiff1d(np.arange(len(X_train)), first)
+            rows = np.concatenate([first, rng.choice(rest, self.max_context - len(first), replace=False)])
             X_train, y_train = X_train[rows], y_train[rows]
         if i > 0:
             features = rng.permutation(X_train.shape[1])
             X_train, X_test = X_train[:, features], X_test[:, features]
         if i % 2 == 1:
-            quantiles = QuantileTransformer(n_quantiles=min(1000, len(X_train)), output_distribution="normal")
+            quantiles = QuantileTransformer(
+                n_quantiles=min(1000, len(X_train)), output_distribution="normal", random_state=self.seed + i
+            )
             X_train, X_test = quantiles.fit_transform(X_train), quantiles.transform(X_test)
         shift = i % self.num_classes
         y_train = (y_train + shift) % self.num_classes

@@ -556,7 +556,7 @@ class KumoPrior(Prior):
     def batch(self, batch_size: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         stacks sampled tables into one batch, adds a missing indicator for every feature that misses train cells,
-        pads features to shared width, standardizes them on train rows, puts missing cells at the train mean and
+        pads features to shared width, puts missing cells at their train mean, standardizes features on train rows and
         splits at train test index
         """
         self.batch_hyperparameters()
@@ -569,6 +569,10 @@ class KumoPrior(Prior):
         x = torch.zeros(batch_size, self.num_datapoints, max(self.num_features, *(c.size(-1) for c in columns)))
         for i, table in enumerate(columns):
             x[i, :, : table.size(-1)] = table
-        x = _standardize_features(x, self.sep).nan_to_num(nan=0.0).to(self.device)
+        # missing cells take the train mean of their column before standardizing, like the mean imputation that
+        # TabularClassifier runs before its StandardScaler, so imputed cells count in the scale as they do there
+        mean = x[:, : self.sep].nanmean(dim=1, keepdim=True).nan_to_num(nan=0.0)
+        x = torch.where(x.isnan(), mean, x)
+        x = _standardize_features(x, self.sep).to(self.device)
         y = torch.stack([target.float() for _, target in tables]).to(self.device)
         return x[:, : self.sep], y[:, : self.sep], x[:, self.sep :], y[:, self.sep :]

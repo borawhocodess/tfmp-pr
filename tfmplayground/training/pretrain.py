@@ -290,6 +290,7 @@ def pretrainTFM(
             total_loss = 0.0
             num_valid = 0
             num_accumulated = 0
+            skipped = 0
             while num_valid < training.eval_every and step < training.steps:
                 x_train, y_train, x_test, y_test = next(batches)
                 x_train = x_train.to(device)
@@ -297,6 +298,7 @@ def pretrainTFM(
                 x_test = x_test.to(device)
                 y_test = y_test.to(device)
                 if not all(torch.isfinite(t).all() for t in (x_train, y_train, x_test, y_test)):
+                    skipped += 1
                     continue
 
                 if regression_task:
@@ -305,12 +307,14 @@ def pretrainTFM(
                     y_train = (y_train - y_mean) / y_std
                     y_test = (y_test - y_mean) / y_std
                     if not torch.isfinite(y_train).all() or not torch.isfinite(y_test).all():
+                        skipped += 1
                         continue
 
                 with torch.autocast(torch.device(device).type, dtype=torch.bfloat16, enabled=training.mixed_precision):
                     output = model(x_train, y_train, x_test)
                 output = output.float()
                 if not torch.isfinite(output).all():
+                    skipped += 1
                     continue
                 if classification_task:
                     y_test = y_test.reshape((-1,)).to(torch.long)
@@ -322,6 +326,7 @@ def pretrainTFM(
 
                 losses = criterion(output, y_test)
                 if not torch.isfinite(losses).all():
+                    skipped += 1
                     continue
 
                 loss = losses.mean()
@@ -344,7 +349,7 @@ def pretrainTFM(
             model.eval()
             optimizer.eval()
 
-            callback.on_eval(step, end_time - train_start_time, mean_loss, model)
+            callback.on_eval(step, end_time - train_start_time, mean_loss, model, skipped=skipped)
             experiment.save_checkpoints(model)
             experiment.save_resume(model, optimizer, prior, step)
     except KeyboardInterrupt:
